@@ -1,14 +1,12 @@
 #!perl -w
 package version::vxs;
 
-use 5.005_03;
+use v5.10;
 use strict;
 
-use vars qw(@ISA $VERSION $CLASS );
-
-$VERSION = 0.9902;
-
-$CLASS = 'version::vxs';
+our $VERSION = 0.9928;
+our $CLASS = 'version::vxs';
+our @ISA;
 
 eval {
     require XSLoader;

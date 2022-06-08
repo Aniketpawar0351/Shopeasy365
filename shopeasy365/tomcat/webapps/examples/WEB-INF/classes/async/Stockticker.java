@@ -25,7 +25,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class Stockticker implements Runnable {
         public volatile boolean run = true;
         protected final AtomicInteger counter = new AtomicInteger(0);
-        final List<TickListener> listeners = new CopyOnWriteArrayList<TickListener>();
+        final List<TickListener> listeners = new CopyOnWriteArrayList<>();
         protected volatile Thread ticker = null;
         protected volatile int ticknr = 0;
 
@@ -66,14 +66,18 @@ public class Stockticker implements Runnable {
 
         public void addTickListener(TickListener listener) {
             if (listeners.add(listener)) {
-                if (counter.incrementAndGet()==1) start();
+                if (counter.incrementAndGet()==1) {
+                    start();
+                }
             }
 
         }
 
         public void removeTickListener(TickListener listener) {
             if (listeners.remove(listener)) {
-                if (counter.decrementAndGet()==0) stop();
+                if (counter.decrementAndGet()==0) {
+                    stop();
+                }
             }
         }
 
@@ -87,8 +91,9 @@ public class Stockticker implements Runnable {
                 while (run) {
                     for (int j = 0; j < 1; j++) {
                         int i = r.nextInt() % 3;
-                        if (i < 0)
+                        if (i < 0) {
                             i = i * (-1);
+                        }
                         Stock stock = stocks[i];
                         double change = r.nextDouble();
                         boolean plus = r.nextBoolean();
@@ -119,8 +124,8 @@ public class Stockticker implements Runnable {
     }
 
     public static final class Stock implements Cloneable {
-        protected static DecimalFormat df = new DecimalFormat("0.00");
-        protected String symbol = "";
+        protected static final DecimalFormat df = new DecimalFormat("0.00");
+        protected final String symbol;
         protected double value = 0.0d;
         protected double lastchange = 0.0d;
         protected int cnt = 0;
@@ -186,11 +191,11 @@ public class Stockticker implements Runnable {
         public String toString() {
             StringBuilder buf = new StringBuilder("STOCK#");
             buf.append(getSymbol());
-            buf.append("#");
+            buf.append('#');
             buf.append(getValueAsString());
-            buf.append("#");
+            buf.append('#');
             buf.append(getLastChangeAsString());
-            buf.append("#");
+            buf.append('#');
             buf.append(String.valueOf(getCnt()));
             return buf.toString();
 

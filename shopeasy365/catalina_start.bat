@@ -19,12 +19,10 @@ echo.
 echo [XAMPP]: Searching for JDK or JRE HOME with reg query ...
 set JDKKeyName64=HKEY_LOCAL_MACHINE\SOFTWARE\JavaSoft\Java Development Kit
 set JDKKeyName64Short=HKEY_LOCAL_MACHINE\SOFTWARE\JavaSoft\JDK
-set JDKKeyName32=HKEY_LOCAL_MACHINE\SOFTWARE\Wow6432Node\JavaSoft\Java Development Kit
 set AdoptOpenJDKKeyName64=HKEY_LOCAL_MACHINE\SOFTWARE\AdoptOpenJDK\JDK
 set JREKeyName64=HKEY_LOCAL_MACHINE\SOFTWARE\JavaSoft\Java Runtime Environment
 set JREKeyName64Short=HKEY_LOCAL_MACHINE\SOFTWARE\JavaSoft\JRE
 set AdoptOpenJDKKeyName64JRE=HKEY_LOCAL_MACHINE\SOFTWARE\AdoptOpenJDK\JRE
-set JREKeyName32=HKEY_LOCAL_MACHINE\SOFTWARE\Wow6432Node\JavaSoft\Java Runtime Environment
 
 reg query "%JDKKeyName64%" /s
 if %ERRORLEVEL% EQU 1 (
@@ -40,19 +38,9 @@ reg query "%JDKKeyName64Short%" /s
 if %ERRORLEVEL% EQU  1 (
     echo . [XAMPP]: Could not find 32 bit JDK
     echo . [XAMPP]: Looking for 32 bit or 64 bit on 64 bit machine with short name
-    goto FINDJDK32
-)
-set KeyName=%JDKKeyName32%
-goto JDKRUN
-
-:FINDJDK32
-reg query "%JDKKeyName32%" /s
-if %ERRORLEVEL% EQU  1 (
-    echo . [XAMPP]: Could not find 32 bit or 64 bit JDK with short name
-    echo . [XAMPP]: Looking for 32 bit or 64 bit AdoptOpenJDK on 64 bit machine
     goto FINDADOPTOPENJDK64
 )
-set KeyName=%JDKKeyName32%
+set KeyName=%JDKKeyName64Short%
 goto JDKRUN
 
 :FINDADOPTOPENJDK64
@@ -90,20 +78,10 @@ reg query "%AdoptOpenJDKKeyName64JRE%" /s
 if %ERRORLEVEL% EQU  1 (
     echo . [XAMPP]: Could not find 32 bit or 64 bit AdoptOpenJDK JRE
     echo . [XAMPP]: Looking for 32 JRE on 64 bit machine
-    goto FINDJRE32
+    goto ENDERROR
 )
 set KeyName=%AdoptOpenJDKKeyName64JRE%
 goto JDKRUN
-
-:FINDJRE32
-reg query "%JREKeyName32%" /s
-if %ERRORLEVEL% EQU 1 (
-    echo . [XAMPP]: Could not find 32 bit JRE
-    echo . [XAMPP]: Could not set JAVA_HOME or JRE_HOME. Aborting
-    goto ENDERROR
-)
-set KeyName=%JREKeyName32%
-goto JRERUN
 
 :JDKRUN
 echo.

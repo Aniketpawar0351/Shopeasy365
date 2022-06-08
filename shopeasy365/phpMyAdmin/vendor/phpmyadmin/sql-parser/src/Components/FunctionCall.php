@@ -2,6 +2,7 @@
 /**
  * Parses a function call.
  */
+
 declare(strict_types=1);
 
 namespace PhpMyAdmin\SqlParser\Components;
@@ -11,8 +12,12 @@ use PhpMyAdmin\SqlParser\Parser;
 use PhpMyAdmin\SqlParser\Token;
 use PhpMyAdmin\SqlParser\TokensList;
 
+use function is_array;
+
 /**
  * Parses a function call.
+ *
+ * @final
  */
 class FunctionCall extends Component
 {
@@ -93,6 +98,7 @@ class FunctionCall extends Component
                 if (($token->type === Token::TYPE_OPERATOR) && ($token->value === '(')) {
                     $ret->parameters = ArrayObj::parse($parser, $list);
                 }
+
                 break;
             }
         }

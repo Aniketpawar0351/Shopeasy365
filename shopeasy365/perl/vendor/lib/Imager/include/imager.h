@@ -23,10 +23,6 @@
 #define PI 3.14159265358979323846
 #endif
 
-#ifndef MAXINT
-#define MAXINT 2147483647
-#endif
-
 #include "imdatatypes.h"
 
 undef_int i_has_format(char *frmt);
@@ -68,6 +64,9 @@ int    i_img_getmask    (i_img *im);
 int    i_img_getchannels(i_img *im);
 i_img_dim i_img_get_width(i_img *im);
 i_img_dim i_img_get_height(i_img *im);
+i_color_model_t i_img_color_model(i_img *im);
+int i_img_alpha_channel(i_img *im, int *channel);
+int i_img_color_channels(i_img *im);
 
 /* Base functions */
 
@@ -132,6 +131,7 @@ void i_arc_aa         (i_img *im, double x, double y, double rad, double d1, dou
 void i_arc_cfill(i_img *im,i_img_dim x,i_img_dim y,double rad,double d1,double d2,i_fill_t *fill);
 void i_arc_aa_cfill(i_img *im,double x,double y,double rad,double d1,double d2,i_fill_t *fill);
 void i_circle_aa   (i_img *im,double x, double y,double rad,const i_color *val);
+void i_circle_aa_fill(i_img *im,double x, double y,double rad,i_fill_t *fill);
 int i_circle_out   (i_img *im,i_img_dim x, i_img_dim y, i_img_dim rad,const i_color *val);
 int i_circle_out_aa   (i_img *im,i_img_dim x, i_img_dim y, i_img_dim rad,const i_color *val);
 void i_copyto      (i_img *im,i_img *src,i_img_dim x1,i_img_dim y1,i_img_dim x2,i_img_dim y2,i_img_dim tx,i_img_dim ty);
@@ -161,6 +161,14 @@ extern i_img *i_matrix_transform_bg(i_img *im, i_img_dim xsize, i_img_dim ysize,
 void i_bezier_multi(i_img *im,int l,const double *x,const double *y,const i_color *val);
 int i_poly_aa     (i_img *im,int l,const double *x,const double *y,const i_color *val);
 int i_poly_aa_cfill(i_img *im,int l,const double *x,const double *y,i_fill_t *fill);
+int i_poly_aa_m     (i_img *im,int l,const double *x,const double *y, i_poly_fill_mode_t mode, const i_color *val);
+int i_poly_aa_cfill_m(i_img *im,int l,const double *x,const double *y, i_poly_fill_mode_t mode, i_fill_t *fill);
+extern int
+i_poly_poly_aa(i_img *im, int count, const i_polygon_t *polys,
+	       i_poly_fill_mode_t mode, const i_color *val);
+extern int
+i_poly_poly_aa_cfill(i_img *im, int count, const i_polygon_t *polys,
+		     i_poly_fill_mode_t mode, i_fill_t *fill);
 
 undef_int i_flood_fill  (i_img *im,i_img_dim seedx,i_img_dim seedy, const i_color *dcol);
 undef_int i_flood_cfill(i_img *im, i_img_dim seedx, i_img_dim seedy, i_fill_t *fill);
@@ -170,7 +178,8 @@ undef_int i_flood_cfill_border(i_img *im, i_img_dim seedx, i_img_dim seedy, i_fi
 
 /* image processing functions */
 
-int i_gaussian    (i_img *im, double stdev);
+int i_gaussian    (i_img *im, double stddev);
+int i_gaussian2    (i_img *im, double stddevX, double stddevY);
 int i_conv        (i_img *im,const double *coeff,int len);
 void i_unsharp_mask(i_img *im, double stddev, double scale);
 
@@ -221,8 +230,15 @@ extern int i_img_is_monochrome(i_img *im, int *zero_is_white);
 extern int i_get_file_background(i_img *im, i_color *bg);
 extern int i_get_file_backgroundf(i_img *im, i_fcolor *bg);
 
-const char * i_test_format_probe(io_glue *data, int length);
+const char * im_test_format_probe(im_context_t ctx, io_glue *data, int length);
+#define i_test_format_probe(io, length) im_test_format_probe(aIMCTX, (io), (length))
 
+/* file type magic to extend file detection */
+extern int im_add_file_magic(im_context_t ctx, const char *name,
+			     const unsigned char *bits, const unsigned char *mask,
+			     size_t length);
+#define i_add_file_magic(name, bits, mask, length) \
+  im_add_file_magic(aIMCTX, (name), (bits), (mask), (length))
 
 i_img   * i_readraw_wiol(io_glue *ig, i_img_dim x, i_img_dim y, int datachannels, int storechannels, int intrl);
 undef_int i_writeraw_wiol(i_img* im, io_glue *ig);
@@ -271,6 +287,7 @@ void i_postlevels(i_img *im,int levels);
 void i_mosaic(i_img *im,i_img_dim size);
 void i_watermark(i_img *im,i_img *wmark,i_img_dim tx,i_img_dim ty,int pixdiff);
 void i_autolevels(i_img *im,float lsat,float usat,float skew);
+void i_autolevels_mono(i_img *im,float lsat,float usat);
 void i_radnoise(i_img *im,i_img_dim xo,i_img_dim yo,double rscale,double ascale);
 void i_turbnoise(i_img *im,double xo,double yo,double scale);
 void i_gradgen(i_img *im, int num, i_img_dim *xo, i_img_dim *yo, i_color *ival, int dmeasure);

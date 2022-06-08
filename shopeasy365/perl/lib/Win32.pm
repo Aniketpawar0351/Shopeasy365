@@ -8,7 +8,7 @@ package Win32;
     require DynaLoader;
 
     @ISA = qw|Exporter DynaLoader|;
-    $VERSION = '0.47';
+    $VERSION = '0.54';
     $XS_VERSION = $VERSION;
     $VERSION = eval $VERSION;
 
@@ -174,6 +174,7 @@ sub VER_SUITE_STORAGE_SERVER           () { 0x00002000 } # Windows Storage Serve
 sub VER_SUITE_TERMINAL                 () { 0x00000010 } # Terminal Services is installed. This value is always set.
 # If VER_SUITE_TERMINAL is set but VER_SUITE_SINGLEUSERTS is not set, the system is running in application server mode.
 sub VER_SUITE_WH_SERVER                () { 0x00008000 } # Windows Home Server is installed.
+sub VER_SUITE_MULTIUSERTS              () { 0x00020000 } # AppServer mode is enabled.
 
 
 sub SM_TABLETPC                ()       { 86 }
@@ -215,7 +216,7 @@ sub PRODUCT_MEDIUMBUSINESS_SERVER_MANAGEMENT () { 0x01E } # Windows Essential Bu
 sub PRODUCT_MEDIUMBUSINESS_SERVER_SECURITY   () { 0x01F } # Windows Essential Business Server Security Server
 sub PRODUCT_MEDIUMBUSINESS_SERVER_MESSAGING  () { 0x020 } # Windows Essential Business Server Messaging Server
 sub PRODUCT_SERVER_FOUNDATION                () { 0x021 } # Server Foundation
-
+#define PRODUCT_HOME_PREMIUM_SERVER                 0x00000022
 sub PRODUCT_SERVER_FOR_SMALLBUSINESS_V       () { 0x023 } # Windows Server 2008 without Hyper-V for Windows Essential Server Solutions
 sub PRODUCT_STANDARD_SERVER_V                () { 0x024 } # Server Standard without Hyper-V (full installation)
 sub PRODUCT_DATACENTER_SERVER_V              () { 0x025 } # Server Datacenter without Hyper-V (full installation)
@@ -224,17 +225,84 @@ sub PRODUCT_DATACENTER_SERVER_CORE_V         () { 0x027 } # Server Datacenter wi
 sub PRODUCT_STANDARD_SERVER_CORE_V           () { 0x028 } # Server Standard without Hyper-V (core installation)
 sub PRODUCT_ENTERPRISE_SERVER_CORE_V         () { 0x029 } # Server Enterprise without Hyper-V (core installation)
 sub PRODUCT_HYPERV                           () { 0x02A } # Microsoft Hyper-V Server
-
+#define PRODUCT_STORAGE_EXPRESS_SERVER_CORE         0x0000002B
+#define PRODUCT_STORAGE_STANDARD_SERVER_CORE        0x0000002C
+#define PRODUCT_STORAGE_WORKGROUP_SERVER_CORE       0x0000002D
+#define PRODUCT_STORAGE_ENTERPRISE_SERVER_CORE      0x0000002E
 sub PRODUCT_STARTER_N                        () { 0x02F } # Starter N
 sub PRODUCT_PROFESSIONAL                     () { 0x030 } # Professional
 sub PRODUCT_PROFESSIONAL_N                   () { 0x031 } # Professional N
-
+#define PRODUCT_SB_SOLUTION_SERVER                  0x00000032
+#define PRODUCT_SERVER_FOR_SB_SOLUTIONS             0x00000033
+#define PRODUCT_STANDARD_SERVER_SOLUTIONS           0x00000034
+#define PRODUCT_STANDARD_SERVER_SOLUTIONS_CORE      0x00000035
+#define PRODUCT_SB_SOLUTION_SERVER_EM               0x00000036
+#define PRODUCT_SERVER_FOR_SB_SOLUTIONS_EM          0x00000037
+#define PRODUCT_SOLUTION_EMBEDDEDSERVER             0x00000038
+#define PRODUCT_SOLUTION_EMBEDDEDSERVER_CORE        0x00000039
+#define PRODUCT_PROFESSIONAL_EMBEDDED               0x0000003A
+#define PRODUCT_ESSENTIALBUSINESS_SERVER_MGMT       0x0000003B
+#define PRODUCT_ESSENTIALBUSINESS_SERVER_ADDL       0x0000003C
+#define PRODUCT_ESSENTIALBUSINESS_SERVER_MGMTSVC    0x0000003D
+#define PRODUCT_ESSENTIALBUSINESS_SERVER_ADDLSVC    0x0000003E
+#define PRODUCT_SMALLBUSINESS_SERVER_PREMIUM_CORE   0x0000003F
+#define PRODUCT_CLUSTER_SERVER_V                    0x00000040
+#define PRODUCT_EMBEDDED                            0x00000041
 sub PRODUCT_STARTER_E                        () { 0x042 } # Starter E
 sub PRODUCT_HOME_BASIC_E                     () { 0x043 } # Home Basic E
 sub PRODUCT_HOME_PREMIUM_E                   () { 0x044 } # Home Premium E
 sub PRODUCT_PROFESSIONAL_E                   () { 0x045 } # Professional E
 sub PRODUCT_ENTERPRISE_E                     () { 0x046 } # Enterprise E
 sub PRODUCT_ULTIMATE_E                       () { 0x047 } # Ultimate E
+#define PRODUCT_ENTERPRISE_EVALUATION               0x00000048
+#define PRODUCT_MULTIPOINT_STANDARD_SERVER          0x0000004C
+#define PRODUCT_MULTIPOINT_PREMIUM_SERVER           0x0000004D
+#define PRODUCT_STANDARD_EVALUATION_SERVER          0x0000004F
+#define PRODUCT_DATACENTER_EVALUATION_SERVER        0x00000050
+#define PRODUCT_ENTERPRISE_N_EVALUATION             0x00000054
+#define PRODUCT_EMBEDDED_AUTOMOTIVE                 0x00000055
+#define PRODUCT_EMBEDDED_INDUSTRY_A                 0x00000056
+#define PRODUCT_THINPC                              0x00000057
+#define PRODUCT_EMBEDDED_A                          0x00000058
+#define PRODUCT_EMBEDDED_INDUSTRY                   0x00000059
+#define PRODUCT_EMBEDDED_E                          0x0000005A
+#define PRODUCT_EMBEDDED_INDUSTRY_E                 0x0000005B
+#define PRODUCT_EMBEDDED_INDUSTRY_A_E               0x0000005C
+#define PRODUCT_STORAGE_WORKGROUP_EVALUATION_SERVER 0x0000005F
+#define PRODUCT_STORAGE_STANDARD_EVALUATION_SERVER  0x00000060
+#define PRODUCT_CORE_ARM                            0x00000061
+sub PRODUCT_CORE_N                           () { 0x62 } # Windows 10 Home N
+sub PRODUCT_CORE_COUNTRYSPECIFIC             () { 0x63 } # Windows 10 Home China
+sub PRODUCT_CORE_SINGLELANGUAGE              () { 0x64 } # Windows 10 Home Single Language
+sub PRODUCT_CORE                             () { 0x65 } # Windows 10 Home
+#define PRODUCT_PROFESSIONAL_WMC                    0x00000067
+#define PRODUCT_MOBILE_CORE                         0x00000068
+#define PRODUCT_EMBEDDED_INDUSTRY_EVAL              0x00000069
+#define PRODUCT_EMBEDDED_INDUSTRY_E_EVAL            0x0000006A
+#define PRODUCT_EMBEDDED_EVAL                       0x0000006B
+#define PRODUCT_EMBEDDED_E_EVAL                     0x0000006C
+#define PRODUCT_NANO_SERVER                         0x0000006D
+#define PRODUCT_CLOUD_STORAGE_SERVER                0x0000006E
+#define PRODUCT_CORE_CONNECTED                      0x0000006F
+#define PRODUCT_PROFESSIONAL_STUDENT                0x00000070
+#define PRODUCT_CORE_CONNECTED_N                    0x00000071
+#define PRODUCT_PROFESSIONAL_STUDENT_N              0x00000072
+#define PRODUCT_CORE_CONNECTED_SINGLELANGUAGE       0x00000073
+#define PRODUCT_CORE_CONNECTED_COUNTRYSPECIFIC      0x00000074
+#define PRODUCT_CONNECTED_CAR                       0x00000075
+#define PRODUCT_INDUSTRY_HANDHELD                   0x00000076
+#define PRODUCT_PPI_PRO                             0x00000077
+#define PRODUCT_ARM64_SERVER                        0x00000078
+sub PRODUCT_EDUCATION                        () { 0x79 } # Windows 10 Education
+sub PRODUCT_EDUCATION_N                      () { 0x7A } # Windows 10 Education N
+#define PRODUCT_IOTUAP                              0x0000007B
+#define PRODUCT_CLOUD_HOST_INFRASTRUCTURE_SERVER    0x0000007C
+#define PRODUCT_ENTERPRISE_S                        0x0000007D
+#define PRODUCT_ENTERPRISE_S_N                      0x0000007E
+#define PRODUCT_PROFESSIONAL_S                      0x0000007F
+#define PRODUCT_PROFESSIONAL_S_N                    0x00000080
+#define PRODUCT_ENTERPRISE_S_EVALUATION             0x00000081
+#define PRODUCT_ENTERPRISE_S_N_EVALUATION           0x00000082
 
 sub PRODUCT_UNLICENSED                       () { 0xABCDABCD } # product has not been activated and is no longer in the grace period
 
@@ -292,7 +360,8 @@ sub GetOSDisplayName {
 		$desc =~ s/^\s*//;
 		s/(200.)/$name Server $1/;
 	    }
-	    s/^Windows (20(03|08|12))/Windows Server $1/;
+	    s/^Windows (20(03|08|12|16|19))/Windows Server $1/;
+            s/^Windows SAC/Windows Server/;
 	}
     }
     $name .= " $desc" if length $desc;
@@ -461,68 +530,148 @@ sub _GetOSName {
 		}
 	    }
 	    elsif ($minor == 2) {
-	    if ($producttype == VER_NT_WORKSTATION) {
-	        $os = "8";
+                if ($producttype == VER_NT_WORKSTATION) {
+                    $os = "8";
+                }
+                else {
+                    $os = "2012";
+                }
 	    }
-	    else {
-	        $os = "2012";
+	    elsif ($minor == 3) {
+		if ($producttype == VER_NT_WORKSTATION) {
+		    $os = "8.1";
+		}
+		else {
+		    $os = "2012";
+		    $desc = "R2";
+		}
 	    }
-	    }
+        }
+	elsif ($major == 10) {
+            if ($producttype == VER_NT_WORKSTATION) {
+                # Build numbers from https://en.wikipedia.org/wiki/Windows_10_version_history
+                $os = '10';
+                if (9841 <= $build && $build <= 10240) {
+                    $desc = " Version 1507";
+                    $desc .= " (Preview Build $build)" if $build < 10240;
+                    $desc .= " (RTM)" if $build == 10240;
+                }
+                elsif (10525 <= $build && $build <= 10586) {
+                    $desc = " Version 1511 (November Update)";
+                    $desc .= " (Preview Build $build)" if $build < 10586;
+                }
+                elsif (11082 <= $build && $build <= 14393) {
+                    $desc = " Version 1607 (Anniversary Update)";
+                    $desc .= " (Preview Build $build)" if $build < 14393;
+                }
+                elsif (14901 <= $build && $build <= 15063) {
+                    $desc = " Version 1703 (Creators Update)";
+                    $desc .= " (Preview Build $build)" if $build < 15063;
+                }
+                elsif (16170 <= $build && $build <= 16299) {
+                    $desc = " Version 1709 (Fall Creators Update)";
+                    $desc .= " (Preview Build $build)" if $build < 16299;
+                }
+                elsif (16353 <= $build && $build <= 17134) {
+                    $desc = " Version 1803 (April 2018 Update)";
+                    $desc .= " (Preview Build $build)" if $build < 17134;
+                }
+                elsif (17604 <= $build && $build <= 17763) {
+                    $desc = " Version 1809 (October 2018 Update)";
+                    $desc .= " (Preview Build $build)" if $build < 17763;
+                }
+                elsif (18204 <= $build && $build <= 18362) {
+                    $desc = " Version 1903 (May 2019 Update)";
+                    $desc .= " (Preview Build $build)" if $build < 18362;
+                }
+                else {
+                    $desc = " Build $build";
+                }
+            }
+            else {
+                if ($build == 14393) {
+                    $os = "2016";
+                    $desc = "Version 1607";
+                }
+                elsif ($build == 17763) {
+                    $os = "2019";
+                    $desc = "Version 1809";
+                }
+                else {
+                    $os = "Server";
+                    if ($build == 16299) {
+                        $desc = "Version 1709";
+                    }
+                    elsif ($build == 17134) {
+                        $desc = "Version 1803";
+                    }
+                    elsif ($build == 18362) {
+                        $desc = "Version 1903";
+                    }
+                    else {
+                        $desc = "Build $build";
+                    }
+                }
+            }
+        }
 
-        if ($productinfo == PRODUCT_ULTIMATE) {
-		$desc .= " Ultimate";
-	    }
-            elsif ($productinfo == PRODUCT_HOME_PREMIUM) {
-               $desc .= " Home Premium";
-            }
-            elsif ($productinfo == PRODUCT_HOME_BASIC) {
-               $desc .= " Home Basic";
-            }
-            elsif ($productinfo == PRODUCT_ENTERPRISE) {
-               $desc .= " Enterprise";
-            }
-            elsif ($productinfo == PRODUCT_BUSINESS) {
-	       # "Windows 7 Business" had a name change to "Windows 7 Professional"
-               $desc .= $minor == 0 ? " Business" : " Professional";
-            }
-            elsif ($productinfo == PRODUCT_STARTER) {
-               $desc .= " Starter";
-            }
-            elsif ($productinfo == PRODUCT_CLUSTER_SERVER) {
-               $desc .= " HPC Server";
-            }
-            elsif ($productinfo == PRODUCT_DATACENTER_SERVER) {
-               $desc .= " Datacenter";
-            }
-            elsif ($productinfo == PRODUCT_DATACENTER_SERVER_CORE) {
-               $desc .= " Datacenter Edition (core installation)";
-            }
-            elsif ($productinfo == PRODUCT_ENTERPRISE_SERVER) {
-               $desc .= " Enterprise";
-            }
-            elsif ($productinfo == PRODUCT_ENTERPRISE_SERVER_CORE) {
-               $desc .= " Enterprise Edition (core installation)";
-            }
-            elsif ($productinfo == PRODUCT_ENTERPRISE_SERVER_IA64) {
-               $desc .= " Enterprise Edition for Itanium-based Systems";
-            }
-            elsif ($productinfo == PRODUCT_SMALLBUSINESS_SERVER) {
-               $desc .= " Small Business Server";
-            }
-            elsif ($productinfo == PRODUCT_SMALLBUSINESS_SERVER_PREMIUM) {
-               $desc .= " Small Business Server Premium Edition";
-            }
-            elsif ($productinfo == PRODUCT_STANDARD_SERVER) {
-               $desc .= " Standard";
-            }
-            elsif ($productinfo == PRODUCT_STANDARD_SERVER_CORE) {
-               $desc .= " Standard Edition (core installation)";
-            }
-            elsif ($productinfo == PRODUCT_WEB_SERVER) {
-               $desc .= " Web Server";
-            }
-            elsif ($productinfo == PRODUCT_PROFESSIONAL) {
-               $desc .= " Professional";
+        if ($major >= 6) {
+            if ($major == 6) {
+                if ($productinfo == PRODUCT_ULTIMATE) {
+                    $desc .= " Ultimate";
+                }
+                elsif ($productinfo == PRODUCT_HOME_PREMIUM) {
+                    $desc .= " Home Premium";
+                }
+                elsif ($productinfo == PRODUCT_HOME_BASIC) {
+                    $desc .= " Home Basic";
+                }
+                elsif ($productinfo == PRODUCT_ENTERPRISE) {
+                    $desc .= " Enterprise";
+                }
+                elsif ($productinfo == PRODUCT_BUSINESS) {
+                    # "Windows 7 Business" had a name change to "Windows 7 Professional"
+                    $desc .= $minor == 0 ? " Business" : " Professional";
+                }
+                elsif ($productinfo == PRODUCT_STARTER) {
+                    $desc .= " Starter";
+                }
+                elsif ($productinfo == PRODUCT_CLUSTER_SERVER) {
+                    $desc .= " HPC Server";
+                }
+                elsif ($productinfo == PRODUCT_DATACENTER_SERVER) {
+                    $desc .= " Datacenter";
+                }
+                elsif ($productinfo == PRODUCT_DATACENTER_SERVER_CORE) {
+                    $desc .= " Datacenter Edition (core installation)";
+                }
+                elsif ($productinfo == PRODUCT_ENTERPRISE_SERVER) {
+                    $desc .= " Enterprise";
+                }
+                elsif ($productinfo == PRODUCT_ENTERPRISE_SERVER_CORE) {
+                    $desc .= " Enterprise Edition (core installation)";
+                }
+                elsif ($productinfo == PRODUCT_ENTERPRISE_SERVER_IA64) {
+                    $desc .= " Enterprise Edition for Itanium-based Systems";
+                }
+                elsif ($productinfo == PRODUCT_SMALLBUSINESS_SERVER) {
+                    $desc .= " Small Business Server";
+                }
+                elsif ($productinfo == PRODUCT_SMALLBUSINESS_SERVER_PREMIUM) {
+                    $desc .= " Small Business Server Premium Edition";
+                }
+                elsif ($productinfo == PRODUCT_STANDARD_SERVER) {
+                    $desc .= " Standard";
+                }
+                elsif ($productinfo == PRODUCT_STANDARD_SERVER_CORE) {
+                    $desc .= " Standard Edition (core installation)";
+                }
+                elsif ($productinfo == PRODUCT_WEB_SERVER) {
+                    $desc .= " Web Server";
+                }
+                elsif ($productinfo == PRODUCT_PROFESSIONAL) {
+                    $desc .= " Professional";
+                }
             }
 
 	    if ($arch == PROCESSOR_ARCHITECTURE_INTEL) {
@@ -917,6 +1066,10 @@ GetOSVersion() in list context.
 The description will also include tags for other special editions,
 like "R2", "Media Center", "Tablet PC", or "Starter Edition".
 
+In the Windows 10 / Server Semi-Annual Channel era, the description may
+contain the relevant ReleaseId value, but this is only inferred from
+the build number, not determined absolutely.
+
 Currently the possible values for the OS name are
 
     WinWin32s
@@ -932,6 +1085,12 @@ Currently the possible values for the OS name are
     WinVista
     Win2008
     Win7
+    Win8
+    Win8.1
+    Win10
+    Win2016
+    Win2019
+    WinSAC
 
 This routine is just a simple interface into GetOSVersion().  More
 specific or demanding situations should use that instead.  Another
@@ -957,35 +1116,41 @@ For the ID, the values are 0 for Win32s, 1 for Windows 9X/Me and 2 for
 Windows NT/2000/XP/2003/Vista/2008/7.  In scalar context it returns just
 the ID.
 
-Currently known values for ID MAJOR and MINOR are as follows:
+Currently known values for ID MAJOR MINOR and BUILD are as follows:
 
-    OS                      ID    MAJOR   MINOR
-    Win32s                   0      -       -
-    Windows 95               1      4       0
-    Windows 98               1      4      10
-    Windows Me               1      4      90
+    OS                      ID    MAJOR   MINOR   BUILD
+    Win32s                   0      -       -       -
+    Windows 95               1      4       0       -
+    Windows 98               1      4      10       -
+    Windows Me               1      4      90       -
 
-    Windows NT 3.51          2      3      51
-    Windows NT 4             2      4       0
+    Windows NT 3.51          2      3      51       -
+    Windows NT 4             2      4       0       -
 
-    Windows 2000             2      5       0
-    Windows XP               2      5       1
-    Windows Server 2003      2      5       2
-    Windows Server 2003 R2   2      5       2
-    Windows Home Server      2      5       2
+    Windows 2000             2      5       0       -
+    Windows XP               2      5       1       -
+    Windows Server 2003      2      5       2       -
+    Windows Server 2003 R2   2      5       2       -
+    Windows Home Server      2      5       2       -
 
-    Windows Vista            2      6       0
-    Windows Server 2008      2      6       0
-    Windows 7                2      6       1
-    Windows Server 2008 R2   2      6       1
-    Windows 8                2      6       2
-    Windows Server 2012      2      6       2
-
+    Windows Vista            2      6       0       -
+    Windows Server 2008      2      6       0       -
+    Windows 7                2      6       1       -
+    Windows Server 2008 R2   2      6       1       -
+    Windows 8                2      6       2       -
+    Windows Server 2012      2      6       2       -
+    Windows 8.1              2      6       2       -
+    Windows Server 2012 R2   2      6       2       -
+    
+    Windows 10               2     10       0       -
+    Windows Server 2016      2     10       0   14393
+    Windows Server 2019      2     10       0   17677
+    
 On Windows NT 4 SP6 and later this function returns the following
 additional values: SPMAJOR, SPMINOR, SUITEMASK, PRODUCTTYPE.
 
 The version numbers for Windows 2003 and Windows Home Server are
-identical; the SUITEMASK field must be used to differentiate between\
+identical; the SUITEMASK field must be used to differentiate between
 them.
 
 The version numbers for Windows Vista and Windows Server 2008 are
@@ -1000,8 +1165,14 @@ The version numbers for Windows 8 and Windows Server 2012 are
 identical; the PRODUCTTYPE field must be used to differentiate between
 them.
 
-SPMAJOR and SPMINOR are are the version numbers of the latest
-installed service pack.
+For modern Windows releases, the major and minor version numbers are
+identical. The PRODUCTTYPE field must be used to differentiate between
+Windows 10 and Server releases. The BUILD field is used to
+differentiate Windows Server versions: currently 2016, 2019, and
+Semi-Annual Channel releases.
+
+SPMAJOR and SPMINOR are the version numbers of the latest
+installed service pack. (In the Windows 10 era, these are unused.)
 
 SUITEMASK is a bitfield identifying the product suites available on
 the system.  Known bits are:
@@ -1022,8 +1193,9 @@ the system.  Known bits are:
     VER_SUITE_STORAGE_SERVER            0x00002000
     VER_SUITE_COMPUTE_SERVER            0x00004000
     VER_SUITE_WH_SERVER                 0x00008000
+    VER_SUITE_MULTIUSERTS               0x00020000
 
-The VER_SUITE_xxx names are listed here to crossreference the Microsoft
+The VER_SUITE_xxx names are listed here to cross reference the Microsoft
 documentation.  The Win32 module does not provide symbolic names for these
 constants.
 
@@ -1145,7 +1317,7 @@ and the SID type.
 
 =item Win32::MsgBox(MESSAGE [, FLAGS [, TITLE]])
 
-Create a dialogbox containing MESSAGE.  FLAGS specifies the
+Create a dialog box containing MESSAGE.  FLAGS specifies the
 required icon and buttons according to the following table:
 
 	0 = OK
@@ -1250,5 +1422,38 @@ Loads the DLL LIBRARYNAME and calls the function
 DllUnregisterServer.
 
 =back
+
+=head1 CAVEATS
+
+=head2 Short Path Names
+
+There are many situations in which modern Windows systems will not have
+the L<short path name|https://docs.microsoft.com/en-us/windows/win32/fileio/naming-a-file#short-vs-long-names>
+(also called 8.3 or MS-DOS) alias for long file names available.
+
+Short path support can be configured system-wide via the registry,
+but the default on modern systems is to configure short path usage per
+volume. The configuration for a volume can be queried in a number of ways,
+but these may either be unreliable or require elevated (administrator)
+privileges.
+
+Typically, the configuration for a volume can be queried using the C<fsutil>
+utility, e.g. C<fsutil 8dot3name query d:>. On the C level, it can be queried
+with a C<FSCTL_QUERY_PERSISTENT_VOLUME_STATE> request to the
+C<DeviceIOControl> API call, as described in
+L<this article|https://www.codeproject.com/Articles/304374/Query-Volume-Setting-for-State-Windows>.
+However, both of these methods require administrator privileges to work.
+
+The Win32 module does not perform any per-volume check and simply fetches
+short path names in the same manner as the underlying Windows API call it
+uses: If short path names are disabled, the call will still succeed but the
+long name will actually be returned.
+
+Note that on volumes where this happens, C<GetANSIPathName> usually cannot be
+used to return useful filenames for files that contain unicode characters.
+(In code page 65001, this may still work.) Handling unicode filenames in this
+legacy manner relies upon C<GetShortPathName> returning 8.3 filenames, but
+without short name support, it will return the filename with all unicode
+characters replaced by question mark characters.
 
 =cut

@@ -3,7 +3,22 @@ session_start();
 include("database.php");
 
 if(isset($_POST['resend_otp'])){
-	header("location: verify_email.php");
+	$otp = rand(100000,999999);
+	// Send OTP
+	$email2=$_SESSION['new_email'];
+	//$_SESSION['new_email']=$email2;
+	$to =$email2;
+	$subject="this is our test email";
+	$message="One Time Password for PHP login authentication is:<br/><br/>" . $otp;
+	$headers="From: aniketpawar0351@gmail.com";
+	$mail_status=mail($to,$subject,$message,$headers);
+	if($mail_status == 1) {
+		$result1 = mysqli_query($con,"UPDATE 1client_details SET OTP='" . $otp . "',is_expired=0,REGISTOR_DATE='" . date("Y-m-d H:i:s"). "' WHERE EMAIL='" .$email2. "'");
+
+		if(!empty($result1)) {
+			$success=1;
+		}
+	}
 }
 $success = "";
 $error_message = "";
@@ -16,16 +31,17 @@ if(isset($_POST["submit_email"])) {
 		$otp = rand(100000,999999);
 		// Send OTP
 		$email2=$_POST["email"];
-		$sql1="SELECT * FROM `1client_details` WHERE EMAIL='$email2'";
-	  $result=mysqli_query($con,$sql1);
-	  $r=mysqli_num_rows($result);
-	  if(!$r>0){
-	    die("<script>Swal.fire({
-	  icon: 'error',
-	  title: 'Oops...',
-	  text: 'Email Address Not Registore'
-	})</script>");
-	  }
+		$_SESSION['new_email']=$email2;
+	// 	$sql1="SELECT * FROM `1client_details` WHERE EMAIL='$email2'";
+	//   $result=mysqli_query($con,$sql1);
+	//   $r=mysqli_num_rows($result);
+	//   if(!$r>0){
+	//     die("<script>Swal.fire({
+	//   icon: 'error',
+	//   title: 'Oops...',
+	//   text: 'Email Address Not Registore'
+	// })</script>");
+	//   }
     $to =$_POST["email"];
     $subject="this is our test email";
     $message="One Time Password for PHP login authentication is:<br/><br/>" . $otp;
@@ -48,13 +64,9 @@ if(isset($_POST["submit_email"])) {
 	}
 }
 if(!empty($_POST["submit_otp"])) {
-	$result = mysqli_query($con,"SELECT * FROM 1client_details WHERE OTP='" . $_POST["otp"] . "' AND is_expired!=1 AND NOW() <= DATE_ADD(REGISTOR_DATE, INTERVAL 24 HOUR)");
-	$count  = mysqli_num_rows($result);
-	if(!empty($count)) {
-    $result3 = mysqli_query($con,"SELECT * FROM 1client_details WHERE OTP='" . $_POST["otp"] . "'");
-    $row = mysqli_fetch_assoc($result3);
-		$result = mysqli_query($con,"UPDATE 1client_details SET is_expired = 1 WHERE OTP = '" . $_POST["otp"] . "'");
-    $result2 = mysqli_query($con,"UPDATE 1admin SET VERIFY_STATUS = 1 WHERE PASSWORD = '" . $row["RPASSWORD"] . "'");
+	$result = mysqli_query($con,"SELECT OTP FROM 1client_details WHERE EMAIL='" . $_SESSION['new_email']. "' AND is_expired!=1 AND NOW() <= DATE_ADD(REGISTOR_DATE, INTERVAL 24 HOUR)");
+  $row = mysqli_fetch_assoc($result);
+	if($_POST["otp"]==$row['OTP']){
 		$success = 2;
 	} else {
 		$success =1;
@@ -117,7 +129,7 @@ background: linear-gradient(to right, #CFDEF3, #E0EAFC); /* W3C, IE 10+/ Edge, F
 })</script>
 
 		<script>setTimeout(function() {
-    openWindow = window.open('sub_details.php', '_self');
+    openWindow = window.open('forgot_pass.php', '_self');
 }, 2500);</script>
 
 		<?php

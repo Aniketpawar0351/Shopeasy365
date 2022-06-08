@@ -27,7 +27,9 @@ goto endofperl
 #!/usr/bin/perl
 #line 29
 
+BEGIN { pop @INC if $INC[-1] eq '.' }
 use strict;
+use warnings;
 use Archive::Tar;
 use Getopt::Std;
 
@@ -47,7 +49,11 @@ my $tar  = Archive::Tar->new( $arch )   or die "Couldn't read '$arch': $!";
 
 foreach my $file ( $tar->get_files ) {
     next unless $file->is_file;
+    my $prefix = $file->prefix;
     my $name = $file->name;
+    if (defined $prefix) {
+        $name = File::Spec->catfile($prefix, $name);
+    }
 
     diff(   \($file->get_content), $name,
             {   FILENAME_A  => $name,

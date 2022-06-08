@@ -1,10 +1,5 @@
 package Moose::Meta::TypeConstraint::Enum;
-BEGIN {
-  $Moose::Meta::TypeConstraint::Enum::AUTHORITY = 'cpan:STEVAN';
-}
-{
-  $Moose::Meta::TypeConstraint::Enum::VERSION = '2.0604';
-}
+our $VERSION = '2.2014';
 
 use strict;
 use warnings;
@@ -13,7 +8,9 @@ use metaclass;
 use B;
 use Moose::Util::TypeConstraints ();
 
-use base 'Moose::Meta::TypeConstraint';
+use parent 'Moose::Meta::TypeConstraint';
+
+use Moose::Util 'throw_exception';
 
 __PACKAGE__->meta->add_attribute('values' => (
     accessor => 'values',
@@ -43,18 +40,23 @@ sub new {
     $args{inlined} = $inliner;
 
     if ( scalar @{ $args{values} } < 1 ) {
-        require Moose;
-        Moose->throw_error("You must have at least one value to enumerate through");
+        throw_exception( MustHaveAtLeastOneValueToEnumerate => params => \%args,
+                                                               class  => $class
+                       );
     }
 
     for (@{ $args{values} }) {
         if (!defined($_)) {
-            require Moose;
-            Moose->throw_error("Enum values must be strings, not undef");
+            throw_exception( EnumValuesMustBeString => params => \%args,
+                                                       class  => $class,
+                                                       value  => $_
+                           );
         }
         elsif (ref($_)) {
-            require Moose;
-            Moose->throw_error("Enum values must be strings, not '$_'");
+            throw_exception( EnumValuesMustBeString => params => \%args,
+                                                       class  => $class,
+                                                       value  => $_
+                           );
         }
     }
 
@@ -69,6 +71,15 @@ sub new {
 
     $self->compile_type_constraint()
         unless $self->_has_compiled_type_constraint;
+
+    $self->message( sub {
+        my $value = shift;
+        sprintf(
+            '%s. Value must be equal to %s.',
+            $self->_default_message->( $value ),
+            Moose::Util::_english_list_or( map B::perlstring($_), @{ $self->values } ),
+        )
+    } );
 
     return $self;
 }
@@ -112,9 +123,11 @@ sub create_child_type {
 
 # ABSTRACT: Type constraint for enumerated values.
 
-
+__END__
 
 =pod
+
+=encoding UTF-8
 
 =head1 NAME
 
@@ -122,7 +135,7 @@ Moose::Meta::TypeConstraint::Enum - Type constraint for enumerated values.
 
 =head1 VERSION
 
-version 2.0604
+version 2.2014
 
 =head1 DESCRIPTION
 
@@ -136,9 +149,7 @@ L<Moose::Meta::TypeConstraint>.
 
 =head1 METHODS
 
-=over 4
-
-=item B<< Moose::Meta::TypeConstraint::Enum->new(%options) >>
+=head2 Moose::Meta::TypeConstraint::Enum->new(%options)
 
 This creates a new enum type constraint based on the given
 C<%options>.
@@ -151,12 +162,12 @@ values. Second, it automatically sets the parent to the C<Str> type.
 Finally, it ignores any provided C<constraint> option. The constraint
 is generated automatically based on the provided C<values>.
 
-=item B<< $constraint->values >>
+=head2 $constraint->values
 
 Returns the array reference of acceptable values provided to the
 constructor.
 
-=item B<< $constraint->create_child_type >>
+=head2 $constraint->create_child_type
 
 This returns a new L<Moose::Meta::TypeConstraint> object with the type
 as its parent.
@@ -164,27 +175,61 @@ as its parent.
 Note that it does I<not> return a C<Moose::Meta::TypeConstraint::Enum>
 object!
 
-=back
-
 =head1 BUGS
 
 See L<Moose/BUGS> for details on reporting bugs.
 
-=head1 AUTHOR
+=head1 AUTHORS
 
-Moose is maintained by the Moose Cabal, along with the help of many contributors. See L<Moose/CABAL> and L<Moose/CONTRIBUTORS> for details.
+=over 4
+
+=item *
+
+Stevan Little <stevan@cpan.org>
+
+=item *
+
+Dave Rolsky <autarch@urth.org>
+
+=item *
+
+Jesse Luehrs <doy@cpan.org>
+
+=item *
+
+Shawn M Moore <sartak@cpan.org>
+
+=item *
+
+יובל קוג'מן (Yuval Kogman) <nothingmuch@woobling.org>
+
+=item *
+
+Karen Etheridge <ether@cpan.org>
+
+=item *
+
+Florian Ragwitz <rafl@debian.org>
+
+=item *
+
+Hans Dieter Pearcey <hdp@cpan.org>
+
+=item *
+
+Chris Prather <chris@prather.org>
+
+=item *
+
+Matt S Trout <mstrout@cpan.org>
+
+=back
 
 =head1 COPYRIGHT AND LICENSE
 
-This software is copyright (c) 2012 by Infinity Interactive, Inc..
+This software is copyright (c) 2006 by Infinity Interactive, Inc.
 
 This is free software; you can redistribute it and/or modify it under
 the same terms as the Perl 5 programming language system itself.
 
 =cut
-
-
-__END__
-
-
-

@@ -26,7 +26,7 @@ goto endofperl
 @rem ';
 #!perl
 #line 29
-    eval 'exec C:\sdp project\perl\bin\perl.exe -S $0 ${1+"$@"}'
+    eval 'exec C:\xampp\perl\bin\perl.exe -S $0 ${1+"$@"}'
 	if $running_under_some_shell;
 
 =head1 NAME
@@ -120,7 +120,7 @@ while (<>) {
 	$export_ok = "\@EXPORT_OK = qw(@export_ok);\n";
     }
 
-    if ( open(PM, ">$newname") ) {
+    if ( open(PM, ">", $newname) ) {
         print PM <<"END";
 package $newpack;
 use 5.006;

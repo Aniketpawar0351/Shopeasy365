@@ -1,10 +1,16 @@
 package Method::Generate::DemolishAll;
 
-use strictures 1;
-use base qw(Moo::Object);
-use Sub::Quote;
-use Moo::_Utils;
-use B qw(perlstring);
+use Moo::_strictures;
+use Moo::Object ();
+BEGIN { our @ISA = qw(Moo::Object) }
+use Sub::Quote qw(quote_sub quotify);
+use Moo::_Utils qw(_getglob);
+use Moo::_mro;
+BEGIN {
+  *_USE_DGD = "$]" < 5.014 ? sub(){1} : sub(){0};
+  require Devel::GlobalDestruction
+    if _USE_DGD();
+}
 
 sub generate_method {
   my ($self, $into) = @_;
@@ -17,15 +23,22 @@ sub generate_method {
     q!    my $self = shift;
     my $e = do {
       local $?;
-      local $@;
-      require Moo::_Utils;
+      local $@;!.(_USE_DGD ? q!
+      require Devel::GlobalDestruction;! : '').q!
+      package !.$into.q!;
       eval {
-        $self->DEMOLISHALL(Moo::_Utils::_in_global_destruction);
+        $self->DEMOLISHALL(!.(
+          _USE_DGD
+            ? 'Devel::GlobalDestruction::in_global_destruction()'
+            : q[${^GLOBAL_PHASE} eq 'DESTRUCT']
+        ).q!);
       };
       $@;
     };
-  
-    no warnings 'misc';
+
+    # fatal warnings+die in DESTROY = bad times (perl rt#123398)
+    no warnings FATAL => 'all';
+    use warnings 'all';
     die $e if $e; # rethrow
   !;
 }
@@ -35,13 +48,16 @@ sub demolishall_body_for {
   my @demolishers =
     grep *{_getglob($_)}{CODE},
     map "${_}::DEMOLISH",
-    @{Moo::_Utils::_get_linear_isa($into)};
-  join '', map qq{    ${me}->${_}(${args});\n}, @demolishers;
+    @{mro::get_linear_isa($into)};
+  join '',
+    qq{    package $into;\n},
+    map qq{    ${me}->${_}(${args});\n}, @demolishers;
 }
 
 sub _handle_subdemolish {
   my ($self, $into) = @_;
-  '    if (ref($_[0]) ne '.perlstring($into).') {'."\n".
+  '    if (ref($_[0]) ne '.quotify($into).') {'."\n".
+  "      package $into;\n".
   '      return shift->Moo::Object::DEMOLISHALL(@_)'.";\n".
   '    }'."\n";
 }

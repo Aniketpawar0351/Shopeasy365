@@ -3,11 +3,10 @@ package Module::Build::Notes;
 # A class for persistent hashes
 
 use strict;
-use vars qw($VERSION);
-$VERSION = '0.4003';
+use warnings;
+our $VERSION = '0.4231';
 $VERSION = eval $VERSION;
 use Data::Dumper;
-use IO::File;
 use Module::Build::Dumper;
 
 sub new {
@@ -24,9 +23,10 @@ sub new {
 sub restore {
   my $self = shift;
 
-  my $fh = IO::File->new("< $self->{file}") or die "Can't read $self->{file}: $!";
+  open(my $fh, '<', $self->{file}) or die "Can't read $self->{file}: $!";
   $self->{disk} = eval do {local $/; <$fh>};
   die $@ if $@;
+  close $fh;
   $self->{new} = {};
 }
 
@@ -107,8 +107,9 @@ sub write {
 sub _dump {
   my ($self, $file, $data) = @_;
 
-  my $fh = IO::File->new("> $file") or die "Can't create '$file': $!";
+  open(my $fh, '>', $file) or die "Can't create '$file': $!";
   print {$fh} Module::Build::Dumper->_data_dump($data);
+  close $fh;
 }
 
 my $orig_template = do { local $/; <DATA> };
@@ -127,11 +128,11 @@ sub write_config_data {
   # recognized for *this* source file
   $template =~ s{$_\n}{} for '=begin private', '=end private';
 
-  my $fh = IO::File->new("> $args{file}") or die "Can't create '$args{file}': $!";
+  open(my $fh, '>', $args{file}) or die "Can't create '$args{file}': $!";
   print {$fh} $template;
   print {$fh} "\n__DATA__\n";
   print {$fh} Module::Build::Dumper->_data_dump([$args{config_data}, $args{feature}, $args{auto_features}]);
-
+  close $fh;
 }
 
 1;
@@ -177,18 +178,17 @@ sub config { $config->{$_[1]} }
 sub set_config { $config->{$_[1]} = $_[2] }
 sub set_feature { $features->{$_[1]} = 0+!!$_[2] }  # Constrain to 1 or 0
 
-sub auto_feature_names { grep !exists $features->{$_}, keys %$auto_features }
+sub auto_feature_names { sort grep !exists $features->{$_}, keys %$auto_features }
 
 sub feature_names {
-  my @features = (keys %$features, auto_feature_names());
+  my @features = (sort keys %$features, auto_feature_names());
   @features;
 }
 
-sub config_names  { keys %$config }
+sub config_names  { sort keys %$config }
 
 sub write {
   my $me = __FILE__;
-  require IO::File;
 
   # Can't use Module::Build::Dumper here because M::B is only a
   # build-time prereq of this module
@@ -196,7 +196,7 @@ sub write {
 
   my $mode_orig = (stat $me)[2] & 07777;
   chmod($mode_orig | 0222, $me); # Make it writeable
-  my $fh = IO::File->new($me, 'r+') or die "Can't rewrite $me: $!";
+  open(my $fh, '+<', $me) or die "Can't rewrite $me: $!";
   seek($fh, 0, 0);
   while (<$fh>) {
     last if /^__DATA__$/;
@@ -205,11 +205,11 @@ sub write {
 
   seek($fh, tell($fh), 0);
   my $data = [$config, $features, $auto_features];
-  $fh->print( 'do{ my '
+  print($fh 'do{ my '
 	      . Data::Dumper->new([$data],['x'])->Purity(1)->Dump()
 	      . '$x; }' );
   truncate($fh, tell($fh));
-  $fh->close;
+  close $fh;
 
   chmod($mode_orig, $me)
     or warn "Couldn't restore permissions on $me: $!";
@@ -221,18 +221,13 @@ sub feature {
 
   my $info = $auto_features->{$key} or return 0;
 
-  # Under perl 5.005, each(%$foo) isn't working correctly when $foo
-  # was reanimated with Data::Dumper and eval().  Not sure why, but
-  # copying to a new hash seems to solve it.
-  my %info = %$info;
-
   require Module::Build;  # XXX should get rid of this
-  while (my ($type, $prereqs) = each %info) {
+  foreach my $type (sort keys %$info) {
+    my $prereqs = $info->{$type};
     next if $type eq 'description' || $type eq 'recommends';
 
-    my %p = %$prereqs;  # Ditto here.
-    while (my ($modname, $spec) = each %p) {
-      my $status = Module::Build->check_installed_status($modname, $spec);
+    foreach my $modname (sort keys %$prereqs) {
+      my $status = Module::Build->check_installed_status($modname, $prereqs->{$modname});
       if ((!$status->{ok}) xor ($type =~ /conflicts$/)) { return 0; }
       if ( ! eval "require $modname; 1" ) { return 0; }
     }

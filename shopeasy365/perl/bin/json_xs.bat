@@ -1,31 +1,18 @@
 @rem = '--*-Perl-*--
-@echo off
-if "%OS%" == "Windows_NT" goto WinNT
-IF EXIST "%~dp0perl.exe" (
-"%~dp0perl.exe" -x -S "%0" %1 %2 %3 %4 %5 %6 %7 %8 %9
-) ELSE IF EXIST "%~dp0..\..\bin\perl.exe" (
-"%~dp0..\..\bin\perl.exe" -x -S "%0" %1 %2 %3 %4 %5 %6 %7 %8 %9
-) ELSE (
-perl -x -S "%0" %1 %2 %3 %4 %5 %6 %7 %8 %9
-)
-
-goto endofperl
+@set "ErrorLevel="
+@if "%OS%" == "Windows_NT" @goto WinNT
+@perl -x -S "%0" %1 %2 %3 %4 %5 %6 %7 %8 %9
+@set ErrorLevel=%ErrorLevel%
+@goto endofperl
 :WinNT
-IF EXIST "%~dp0perl.exe" (
-"%~dp0perl.exe" -x -S %0 %*
-) ELSE IF EXIST "%~dp0..\..\bin\perl.exe" (
-"%~dp0..\..\bin\perl.exe" -x -S %0 %*
-) ELSE (
-perl -x -S %0 %*
-)
-
-if NOT "%COMSPEC%" == "%SystemRoot%\system32\cmd.exe" goto endofperl
-if %errorlevel% == 9009 echo You do not have Perl in your PATH.
-if errorlevel 1 goto script_failed_so_exit_with_non_zero_val 2>nul
-goto endofperl
+@perl -x -S %0 %*
+@set ErrorLevel=%ErrorLevel%
+@if NOT "%COMSPEC%" == "%SystemRoot%\system32\cmd.exe" @goto endofperl
+@if %ErrorLevel% == 9009 @echo You do not have Perl in your PATH.
+@goto endofperl
 @rem ';
 #!/opt/bin/perl
-#line 29
+#line 30
 
 =head1 NAME
 
@@ -61,19 +48,21 @@ C<fromformat> can be one of:
 
 =item json - a json text encoded, either utf-8, utf16-be/le, utf32-be/le
 
-=item storable - a Storable frozen value
+=item cbor - CBOR (RFC 7049, L<CBOR::XS>), a kind of binary JSON
 
-=item storable-file - a Storable file (Storable has two incompatible formats)
+=item storable - a L<Storable> frozen value
 
-=item bencode - use Convert::Bencode, if available (used by torrent files, among others)
+=item storable-file - a L<Storable> file (Storable has two incompatible formats)
 
-=item clzf - Compress::LZF format (requires that module to be installed)
+=item bencode - use L<Convert::Bencode>, if available (used by torrent files, among others)
+
+=item clzf - L<Compress::LZF> format (requires that module to be installed)
 
 =item eval - evaluate the given code as (non-utf-8) Perl, basically the reverse of "-t dump"
 
-=item yaml - YAML (avoid at all costs, requires the YAML module :)
+=item yaml - L<YAML> format (requires that module to be installed)
 
-=item string - do not attempt to decode te file data
+=item string - do not attempt to decode the file data
 
 =item none - nothing is read, creates an C<undef> scalar - mainly useful with C<-e>
 
@@ -95,19 +84,23 @@ C<toformat> can be one of:
 
 =item json-utf-32le, json-utf-32be - little endian/big endian utf-32
 
-=item storable - a Storable frozen value in network format
+=item cbor - CBOR (RFC 7049, L<CBOR::XS>), a kind of binary JSON
 
-=item storable-file - a Storable file in network format (Storable has two incompatible formats)
+=item cbor-packed - CBOR using extensions to make it smaller
 
-=item bencode - use Convert::Bencode, if available (used by torrent files, among others)
+=item storable - a L<Storable> frozen value in network format
 
-=item clzf - Compress::LZF format
+=item storable-file - a L<Storable> file in network format (Storable has two incompatible formats)
 
-=item yaml - YAML
+=item bencode - use L<Convert::Bencode>, if available (used by torrent files, among others)
 
-=item dump - Data::Dump
+=item clzf - L<Compress::LZF> format
 
-=item dumper - Data::Dumper
+=item yaml - L<YAML::XS> format
+
+=item dump - L<Data::Dump>
+
+=item dumper - L<Data::Dumper>
 
 =item string - writes the data out as if it were a string
 
@@ -200,11 +193,12 @@ my %F = (
       warn "input text encoding is $enc\n" if $opt_verbose;
       JSON::XS->new->decode (decode $enc, $_)
    },
+   "cbor"          => sub { require CBOR::XS; CBOR::XS->new->allow_cycles->decode ($_) },
    "storable"      => sub { Storable::thaw $_ },
    "storable-file" => sub { open my $fh, "<", \$_; Storable::fd_retrieve $fh },
    "bencode"       => sub { require Convert::Bencode; Convert::Bencode::bdecode ($_) },
    "clzf"          => sub { require Compress::LZF; Compress::LZF::sthaw ($_) },
-   "yaml"          => sub { require YAML; YAML::Load ($_) },
+   "yaml"          => sub { require YAML::XS; YAML::XS::Load ($_) },
    "eval"          => sub { my $v = eval "no strict; no warnings; no utf8;\n#line 1 \"input\"\n$_"; die "$@" if $@; $v },
 );
 
@@ -213,18 +207,18 @@ my %T = (
    "string"        => sub { $_ },
    "json"          => sub { encode_json $_ },
    "json-utf-8"    => sub { encode_json $_ },
-   "json-pretty"   => sub { JSON::XS->new->utf8->pretty->encode ($_) },
+   "json-pretty"   => sub { JSON::XS->new->utf8->pretty->canonical->encode ($_) },
    "json-utf-16le" => sub { encode "utf-16le", JSON::XS->new->encode ($_) },
    "json-utf-16be" => sub { encode "utf-16be", JSON::XS->new->encode ($_) },
    "json-utf-32le" => sub { encode "utf-32le", JSON::XS->new->encode ($_) },
    "json-utf-32be" => sub { encode "utf-32be", JSON::XS->new->encode ($_) },
-
+   "cbor"          => sub { require CBOR::XS; CBOR::XS::encode_cbor ($_) },
+   "cbor-packed"   => sub { require CBOR::XS; CBOR::XS->new->pack_strings->encode ($_) },
    "storable"      => sub { Storable::nfreeze $_ },
    "storable-file" => sub { open my $fh, ">", \my $buf; Storable::nstore_fd $_, $fh; $buf },
-
    "bencode"       => sub { require Convert::Bencode; Convert::Bencode::bencode ($_) },
    "clzf"          => sub { require Compress::LZF; Compress::LZF::sfreeze_cr ($_) },
-   "yaml"          => sub { require YAML; YAML::Dump ($_) },
+   "yaml"          => sub { require YAML::XS; YAML::XS::Dump ($_) },
    "dumper"        => sub {
       require Data::Dumper;
       #local $Data::Dumper::Purity    = 1; # hopeless case
@@ -246,7 +240,7 @@ $F{$opt_from}
    or die "$opt_from: not a valid fromformat\n";
 
 $T{$opt_to}
-   or die "$opt_from: not a valid toformat\n";
+   or die "$opt_to: not a valid toformat\n";
 
 if ($opt_from ne "none") {
    local $/;
@@ -266,6 +260,6 @@ syswrite STDOUT, $_;
 
 
 
-
 __END__
 :endofperl
+@set "ErrorLevel=" & @goto _undefined_label_ 2>NUL || @"%COMSPEC%" /d/c @exit %ErrorLevel%

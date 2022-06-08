@@ -2,6 +2,7 @@
 /**
  * Parses a reference to a LOCK expression.
  */
+
 declare(strict_types=1);
 
 namespace PhpMyAdmin\SqlParser\Components;
@@ -11,8 +12,13 @@ use PhpMyAdmin\SqlParser\Parser;
 use PhpMyAdmin\SqlParser\Token;
 use PhpMyAdmin\SqlParser\TokensList;
 
+use function implode;
+use function is_array;
+
 /**
  * Parses a reference to a LOCK expression.
+ *
+ * @final
  */
 class LockExpression extends Component
 {
@@ -65,7 +71,8 @@ class LockExpression extends Component
             $token = $list->tokens[$list->idx];
 
             // End of statement.
-            if ($token->type === Token::TYPE_DELIMITER
+            if (
+                $token->type === Token::TYPE_DELIMITER
                 || ($token->type === Token::TYPE_OPERATOR
                 && $token->value === ',')
             ) {
@@ -80,6 +87,7 @@ class LockExpression extends Component
                 $ret->type = self::parseLockType($parser, $list);
                 $state = 2;
             }
+
             $prevToken = $token;
         }
 
@@ -108,6 +116,9 @@ class LockExpression extends Component
         return $component->table . ' ' . $component->type;
     }
 
+    /**
+     * @return string
+     */
     private static function parseLockType(Parser $parser, TokensList $list)
     {
         $lockType = '';
@@ -138,7 +149,8 @@ class LockExpression extends Component
             $token = $list->tokens[$list->idx];
 
             // End of statement.
-            if ($token->type === Token::TYPE_DELIMITER
+            if (
+                $token->type === Token::TYPE_DELIMITER
                 || ($token->type === Token::TYPE_OPERATOR
                 && $token->value === ',')
             ) {
@@ -168,23 +180,24 @@ class LockExpression extends Component
                     $parser->error('Unexpected keyword.', $token);
                     break;
                 }
+
                 $lockType .= $token->keyword;
             } elseif ($state === 1) {
-                if ($token->keyword === 'LOCAL') {
-                    $lockType .= ' ' . $token->keyword;
-                    $state = 3;
-                } else {
+                if ($token->keyword !== 'LOCAL') {
                     $parser->error('Unexpected keyword.', $token);
                     break;
                 }
+
+                $lockType .= ' ' . $token->keyword;
+                $state = 3;
             } elseif ($state === 2) {
-                if ($token->keyword === 'WRITE') {
-                    $lockType .= ' ' . $token->keyword;
-                    $state = 3; // parsing over
-                } else {
+                if ($token->keyword !== 'WRITE') {
                     $parser->error('Unexpected keyword.', $token);
                     break;
                 }
+
+                $lockType .= ' ' . $token->keyword;
+                $state = 3; // parsing over
             }
 
             $prevToken = $token;

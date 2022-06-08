@@ -1,3 +1,2 @@
 
-
-See :  https://httpd.apache.org/docs/2.4/ 
+See http://httpd.apache.org/docs/2.4/  

@@ -1,15 +1,10 @@
 package Filter::tee ;
 
-require 5.002;
-require DynaLoader;
-use strict;
-use warnings;
-use vars qw( @ISA $VERSION);
-@ISA = qw(DynaLoader);
-$VERSION = "1.45" ;
+require 5.006 ;
+require XSLoader;
+our $VERSION = "1.60" ;
 
-bootstrap Filter::tee ;
-
+XSLoader::load('Filter::tee');
 1;
 __END__
 

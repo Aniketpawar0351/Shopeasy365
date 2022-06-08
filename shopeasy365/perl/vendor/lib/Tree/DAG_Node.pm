@@ -2,9 +2,12 @@ package Tree::DAG_Node;
 
 use strict;
 use warnings;
+use warnings qw(FATAL utf8); # Fatalize encoding glitches.
 
 our $Debug   = 0;
-our $VERSION = '1.11';
+our $VERSION = '1.31';
+
+use File::Slurp::Tiny 'read_lines';
 
 # -----------------------------------------------
 
@@ -65,7 +68,7 @@ sub _add_daughters_wrapper {
       ($daughter->name() || $daughter),
       ($mother->name()   || $mother)     if $Debug > 1;
 
-    die "Mother can't be its own daughter\n" if $mother eq $daughter;
+    die 'Mother (' . $mother -> name . ") can't be its own daughter\n" if $mother eq $daughter;
 
     die "$daughter (" . ($daughter->name || 'no_name') .
       ") is an ancestor of $mother (" . ($mother->name || 'no_name') .
@@ -280,35 +283,55 @@ sub common_ancestor {
 
 # -----------------------------------------------
 
-sub copy {
-  my($from,$o) = @_[0,1];
-  $o = {} unless ref $o;
+sub copy
+{
+	my($from, $o) = @_[0,1];
+	$o = {} unless ref $o;
 
-  # Straight dupe, and bless into same class:
-  my $to = bless { %$from }, ref($from);
+	# Straight dup, and bless into same class.
 
-  # Null out linkages.
-  $to->_init_mother;
-  $to->_init_daughters;
+	my $to = bless { %$from }, ref($from);
 
-  # dupe the 'attributes' attribute:
-  unless($o->{'no_attribute_copy'}) {
-    my $attrib_copy = ref($to->{'attributes'});
-    if($attrib_copy) {
-      if($attrib_copy eq 'HASH') {
-        $to->{'attributes'} = { %{$to->{'attributes'}} };
-        # dupe the hashref
-      } elsif ($attrib_copy = UNIVERSAL::can($to->{'attributes'}, 'copy') ) {
-        # $attrib_copy now points to the copier method
-        $to->{'attributes'} = &{$attrib_copy}($from);
-      } # otherwise I don't know how to copy it; leave as is
-    }
-  }
-  $o->{'from_to'}->{$from} = $to; # SECRET VOODOO
-    # ...autovivifies an anon hashref for 'from_to' if need be
-    # This is here in case I later want/need a table corresponding
-    # old nodes to new.
-  return $to;
+	# Null out linkages.
+
+	$to -> _init_mother;
+	$to -> _init_daughters;
+
+	# Dup the 'attributes' attribute.
+
+	if ($$o{'no_attribute_copy'})
+	{
+		$$to{attributes} = {};
+	}
+	else
+	{
+		my $attrib_copy = ref($to->{'attributes'});
+
+		if ($attrib_copy)
+		{
+			if ($attrib_copy eq 'HASH')
+			{
+				# Dup the hashref.
+
+				$$to{'attributes'} = { %{$$to{'attributes'}} };
+			}
+			elsif ($attrib_copy = UNIVERSAL::can($to->{'attributes'}, 'copy') )
+			{
+				# $attrib_copy now points to the copier method.
+
+				$$to{'attributes'} = &{$attrib_copy}($from);
+
+			} # Otherwise I don't know how to copy it; leave as is.
+		}
+	}
+
+	$$o{'from_to'}{$from} = $to; # SECRET VOODOO
+
+	# ...autovivifies an anon hashref for 'from_to' if need be
+	# This is here in case I later want/need a table corresponding
+	# old nodes to new.
+
+	return $to;
 }
 
 # -----------------------------------------------
@@ -348,6 +371,45 @@ sub daughters { # read-only attrib-method: returns a list.
   #return $this->{'daughters'};
   return @{$this->{'daughters'} || []};
 }
+
+# ------------------------------------------------
+
+sub decode_lol
+{
+	my($self, $result) = @_;
+	my(@worklist)      = $result;
+
+	my($obj);
+	my($ref_type);
+	my(@stack);
+
+	do
+	{
+		$obj      = shift @worklist;
+		$ref_type = ref $obj;
+
+		if ($ref_type eq 'ARRAY')
+		{
+			unshift @worklist, @$obj;
+		}
+		elsif ($ref_type eq 'HASH')
+		{
+			push @stack, {%$obj};
+		}
+		elsif ($ref_type)
+		{
+			die "Unsupported object type $ref_type\n";
+		}
+		else
+		{
+			push @stack, $obj;
+		}
+
+	} while (@worklist);
+
+	return [@stack];
+
+} # End of decode_lol.
 
 # -----------------------------------------------
 
@@ -609,7 +671,7 @@ sub dump_names {
         join('',
              $o->{'indent'} x $o->{'_depth'},
              $o->{'tick'},
-             &Tree::DAG_Node::_dump_quote(defined $this->name ? $this->name : $this),
+             defined $this->name ? $this->name : $this,
              "\n"
         )
       );
@@ -622,37 +684,11 @@ sub dump_names {
 
 # -----------------------------------------------
 
-sub _dump_quote {
-  my @stuff = @_;
-  return
-    join(", ",
-    map
-     { # the cleaner-upper function
-       if(!length($_)) { # empty string
-         "''";
-       } elsif( m/^-?\d+(?:\.\d+)?$/s ) { # a number
-         $_;
-       } elsif( # text with junk in it
-          s<([^\x20\x21\x23\x27-\x3F\x41-\x5B\x5D-\x7E])>
-           <'\\x'.(unpack("H2",$1))>eg
-         ) {
-         "\"$_\"";
-       } else { # text with no junk in it
-         s<'><\\'>g;
-         "\'$_\'";
-       }
-     }
-     @stuff
-    );
-}
-
-# -----------------------------------------------
-
 sub format_node
 {
 	my($self, $options, $node) = @_;
 	my($s) = $node -> name;
-	$s     .= '. Attributes: ' . $self -> hashref2string($node -> attributes) if (! defined $$options{no_attributes});
+	$s     .= '. Attributes: ' . $self -> hashref2string($node -> attributes) if (! $$options{no_attributes});
 
 	return $s;
 
@@ -950,25 +986,35 @@ sub new_daughter_left {
 
 sub node2string
 {
-	my($self, $options, $t, $vert_dashes) = @_;
-	my($depth)         = scalar($t -> ancestors) || 0;
-	my($sibling_count) = defined $t -> mother ? scalar $t -> self_and_sisters : 1;
-	my($offset)        = ' ' x 4;
+	my($self, $options, $node, $vert_dashes) = @_;
+	my($depth)         = scalar($node -> ancestors) || 0;
+	my($sibling_count) = defined $node -> mother ? scalar $node -> self_and_sisters : 1;
+	my($offset)        = ' ' x 5;
 	my(@indent)        = map{$$vert_dashes[$_] || $offset} 0 .. $depth - 1;
 	@$vert_dashes      =
 	(
 		@indent,
-		($sibling_count == 1 ? $offset : '   |'),
+		($sibling_count == 1 ? $offset : '    |'),
 	);
 
-	if ($sibling_count == ($t -> my_daughter_index + 1) )
+	if ($sibling_count == ($node -> my_daughter_index + 1) )
 	{
 		$$vert_dashes[$depth] = $offset;
 	}
 
-	return join('' => @indent[1 .. $#indent]) . ($depth ? '   |---' : '') . $self -> format_node($options, $t);
+	return join('' => @indent[1 .. $#indent]) . ($depth ? '    |--- ' : '') . $self -> format_node($options, $node);
 
 } # End of node2string.
+
+# -----------------------------------------------
+
+sub quote_name
+{
+	my($self, $name) = @_;
+
+	return "'$name'";
+
+} # End of quote_name.
 
 # -----------------------------------------------
 
@@ -1027,6 +1073,90 @@ sub random_network { # constructor or method.
 
   return $root;
 }
+
+# -----------------------------------------------
+
+sub read_attributes
+{
+	my($self, $s) = @_;
+
+	my($attributes);
+	my($name);
+
+	if ($s =~ /^(.+)\. Attributes: (\{.*\})$/)
+	{
+		($name, $attributes) = ($1, $self -> string2hashref($2) );
+	}
+	else
+	{
+		($name, $attributes) = ($s, {});
+	}
+
+	return Tree::DAG_Node -> new({name => $name, attributes => $attributes});
+
+} # End of read_attributes.
+
+# -----------------------------------------------
+
+sub read_tree
+{
+	my($self, $file_name) = @_;
+	my($count)       = 0;
+	my($last_indent) = 0;
+	my($test_string) = '--- ';
+	my($test_length) = length $test_string;
+
+	my($indent);
+	my($node);
+	my($offset);
+	my($root);
+	my(@stack);
+	my($tos);
+
+	for my $line (read_lines($file_name, binmode => ':encoding(utf-8)', chomp => 1) )
+	{
+		$count++;
+
+		if ($count == 1)
+		{
+			$root = $node = $self -> read_attributes($line);
+		}
+		else
+		{
+			$indent = index($line, $test_string);
+
+			if ($indent > $last_indent)
+			{
+				$tos = $node;
+
+				push @stack, $node, $indent;
+			}
+			elsif ($indent < $last_indent)
+			{
+				$offset = $last_indent;
+
+				while ($offset > $indent)
+				{
+					$offset = pop @stack;
+					$tos    = pop @stack;
+				}
+
+				push @stack, $tos, $offset;
+			}
+
+			# Warning: The next line must set $node.
+			# Don't put the RHS into the call to add_daughter()!
+
+			$node        = $self -> read_attributes(substr($line, $indent + $test_length) );
+			$last_indent = $indent;
+
+			$tos -> add_daughter($node);
+		}
+	}
+
+	return $root;
+
+} # End of read_tree.
 
 # -----------------------------------------------
 
@@ -1229,6 +1359,141 @@ sub sisters {
 
 # -----------------------------------------------
 
+sub string2hashref
+{
+	my($self, $s) = @_;
+	$s            ||= '';
+	my($result)   = {};
+
+	my($k);
+	my($v);
+
+	if ($s)
+	{
+		# Expect:
+		# 1: The presence of the comma in "(',')" complicates things, so we can't use split(/\s*,\s*/, $s).
+		#	{x => "(',')"}
+		# 2: The presence of "=>" complicates things, so we can't use split(/\s*=>\s*/).
+		#	{x => "=>"}
+		# 3: So, assume ', ' is the outer separator, and then ' => ' is the inner separator.
+
+		# Firstly, clean up the input, just to be safe.
+		# None of these will match output from hashref2string($h).
+
+		$s            =~ s/^\s*\{*//;
+		$s            =~ s/\s*\}\s*$/\}/;
+		my($finished) = 0;
+
+		# The first '\' is for UltraEdit's syntax hiliting.
+
+		my($reg_exp)  =
+		qr/
+			([\"'])([^"']*?)\1\s*=>\s*(["'])([^"']*?)\3,?\s*
+			|
+			(["'])([^"']*?)\5\s*=>\s*(.*?),?\s*
+			|
+			(.*?)\s*=>\s*(["'])([^"']*?)\9,?\s*
+			|
+			(.*?)\s*=>\s*(.*?),?\s*
+		/sx;
+
+		my(@got);
+
+		while (! $finished)
+		{
+			if ($s =~ /$reg_exp/gc)
+			{
+				push @got, defined($2) ? ($2, $4) : defined($6) ? ($6, $7) : defined($8) ? ($8, $10) : ($11, $12);
+			}
+			else
+			{
+				$finished = 1;
+			}
+		}
+
+		$result = {@got};
+	}
+
+	return $result;
+
+} # End of string2hashref.
+
+# -----------------------------------------------
+
+sub tree_to_lol {
+  # I haven't /rigorously/ tested this.
+  my($it, $o) = @_[0,1]; # $o is currently unused anyway
+  $o = {} unless ref $o;
+
+  my $out = [];
+  my @lol_stack = ($out);
+  $o->{'callback'} = sub {
+      my($this, $o) = @_[0,1];
+      my $new = [];
+      push @{$lol_stack[-1]}, $new;
+      push(@lol_stack, $new);
+      return 1;
+    }
+  ;
+  $o->{'callbackback'} = sub {
+      my($this, $o) = @_[0,1];
+      my $name = defined $this->name ? $it -> quote_name($this->name) : 'undef';
+      push @{$lol_stack[-1]}, $name;
+      pop @lol_stack;
+      return 1;
+    }
+  ;
+  $it->walk_down($o);
+  die "totally bizarre error 12416" unless ref($out->[0]);
+  $out = $out->[0]; # the real root
+  return $out;
+}
+
+# -----------------------------------------------
+
+sub tree_to_lol_notation {
+  my($it, $o) = @_[0,1];
+  $o = {} unless ref $o;
+  my @out = ();
+  $o->{'_depth'} ||= 0;
+  $o->{'multiline'} = 0 unless exists($o->{'multiline'});
+
+  my $line_end;
+  if($o->{'multiline'}) {
+    $o->{'indent'} ||= '  ';
+    $line_end = "\n";
+  } else {
+    $o->{'indent'} ||= '';
+    $line_end = '';
+  }
+
+  $o->{'callback'} = sub {
+      my($this, $o) = @_[0,1];
+      push(@out,
+             $o->{'indent'} x $o->{'_depth'},
+             "[$line_end",
+      );
+      return 1;
+    }
+  ;
+  $o->{'callbackback'} = sub {
+      my($this, $o) = @_[0,1];
+      my $name = defined $this->name ? $it -> quote_name($this->name) : 'undef';
+      push(@out,
+             $o->{'indent'} x ($o->{'_depth'} + 1),
+             "$name$line_end",
+             $o->{'indent'} x $o->{'_depth'},
+             "],$line_end",
+      );
+      return 1;
+    }
+  ;
+  $it->walk_down($o);
+  return join('', @out);
+}
+
+# -----------------------------------------------
+
 sub tree_to_simple_lol {
   # I haven't /rigorously/ tested this.
   my $root = $_[0];
@@ -1244,7 +1509,8 @@ sub tree_to_simple_lol {
   $o->{'callback'} = sub {
       my($this, $o) = @_[0,1];
       my $new;
-      $new = scalar($this->daughters) ? [] : $this->name;
+      my $name = defined $this->name ? $it -> quote_name($this->name) : 'undef';
+      $new = scalar($this->daughters) ? [] : $name;
         # Terminal nodes are scalars, the rest are listrefs we'll fill in
         # as we recurse the tree below here.
       push @{$lol_stack[-1]}, $new;
@@ -1285,11 +1551,10 @@ sub tree_to_simple_lol_notation {
                "[$line_end",
         );
       } else {   # Terminal
-        my $name = $this->name;
+        my $name = defined $this->name ? $it -> quote_name($this->name) : 'undef';
         push @out,
           $o->{'indent'} x $o->{'_depth'},
-          defined($name) ? &Tree::DAG_Node::_dump_quote($name) : 'undef',
-          ",$line_end";
+          "$name,$line_end";
       }
       return 1;
     }
@@ -1310,85 +1575,12 @@ sub tree_to_simple_lol_notation {
 
 # -----------------------------------------------
 
-sub tree_to_lol {
-  # I haven't /rigorously/ tested this.
-  my($it, $o) = @_[0,1]; # $o is currently unused anyway
-  $o = {} unless ref $o;
-
-  my $out = [];
-  my @lol_stack = ($out);
-  $o->{'callback'} = sub {
-      my($this, $o) = @_[0,1];
-      my $new = [];
-      push @{$lol_stack[-1]}, $new;
-      push(@lol_stack, $new);
-      return 1;
-    }
-  ;
-  $o->{'callbackback'} = sub {
-      my($this, $o) = @_[0,1];
-      push @{$lol_stack[-1]}, $this->name;
-      pop @lol_stack;
-      return 1;
-    }
-  ;
-  $it->walk_down($o);
-  die "totally bizarre error 12416" unless ref($out->[0]);
-  $out = $out->[0]; # the real root
-  return $out;
-}
-
-# -----------------------------------------------
-
-sub tree_to_lol_notation {
-  my $root = $_[0];
-  my($it, $o) = @_[0,1];
-  $o = {} unless ref $o;
-  my @out = ();
-  $o->{'_depth'} ||= 0;
-  $o->{'multiline'} = 0 unless exists($o->{'multiline'});
-
-  my $line_end;
-  if($o->{'multiline'}) {
-    $o->{'indent'} ||= '  ';
-    $line_end = "\n";
-  } else {
-    $o->{'indent'} ||= '';
-    $line_end = '';
-  }
-
-  $o->{'callback'} = sub {
-      my($this, $o) = @_[0,1];
-      push(@out,
-             $o->{'indent'} x $o->{'_depth'},
-             "[$line_end",
-      );
-      return 1;
-    }
-  ;
-  $o->{'callbackback'} = sub {
-      my($this, $o) = @_[0,1];
-      my $name = defined $this->name ? &Tree::DAG_Node::_dump_quote($this->name) : 'undef';
-      push(@out,
-             $o->{'indent'} x ($o->{'_depth'} + 1),
-             "$name$line_end",
-             $o->{'indent'} x $o->{'_depth'},
-             "], $line_end",
-      );
-      return 1;
-    }
-  ;
-  $it->walk_down($o);
-  return join('', @out);
-}
-
-# -----------------------------------------------
-
 sub tree2string
 {
 	my($self, $options, $tree) = @_;
-	$options ||= {};
-	$tree    ||= $self;
+	$options                   ||= {};
+	$$options{no_attributes}   ||= 0;
+	$tree                      ||= $self;
 
 	my(@out);
 	my(@vert_dashes);
@@ -1506,13 +1698,15 @@ sub walk_down {
 
 =pod
 
+=encoding utf-8
+
 =head1 NAME
 
 Tree::DAG_Node - An N-ary tree
 
 =head1 SYNOPSIS
 
-Using as a base class:
+=head2 Using as a base class
 
 	package Game::Tree::Node;
 
@@ -1520,16 +1714,47 @@ Using as a base class:
 
 	# Now add your own methods overriding/extending the methods in C<Tree::DAG_Node>...
 
-Using as a class of its own:
+=head2 Using as a class on its own
 
 	use Tree::DAG_Node;
 
-	my $root = Tree::DAG_Node->new();
+	my($root) = Tree::DAG_Node -> new({name => 'root', attributes => {uid => 0} });
 
-	$root->name("I'm the tops");
-	my $new_daughter = $root->new_daughter;
-	$new_daughter->name("More");
+	$root -> add_daughter(Tree::DAG_Node -> new({name => 'one', attributes => {uid => 1} }) );
+	$root -> add_daughter(Tree::DAG_Node -> new({name => 'two', attributes => {} }) );
+	$root -> add_daughter(Tree::DAG_Node -> new({name => 'three'}) ); # Attrs default to {}.
+
+Or:
+
+	my($count) = 0;
+	my($tree)  = Tree::DAG_Node -> new({name => 'Root', attributes => {'uid' => $count} });
+
+Or:
+
+	my $root = Tree::DAG_Node -> new();
+
+	$root -> name("I'm the tops");
+	$root -> attributes({uid => 0});
+
+	my $new_daughter = $root -> new_daughter;
+
+	$new_daughter -> name('Another node');
+	$new_daughter -> attributes({uid => 1});
 	...
+
+Lastly, for fancy wrappers - called _add_daughter() - around C<new()>, see these modules:
+L<Marpa::Demo::StringParser> and L<GraphViz2::Marpa>. Both of these modules use L<Moo>.
+
+See scripts/*.pl for other samples.
+
+=head2 Using with utf-8 data
+
+read_tree($file_name) works with utf-8 data. See t/read.tree.t and t/tree.utf8.attributes.txt.
+Such a file can be created by redirecting the output of tree2string() to a file of type utf-8.
+
+See the docs for L<Encode> for the difference between utf8 and utf-8. In brief, use utf-8.
+
+See also scripts/write_tree.pl and scripts/read.tree.pl and scripts/read.tree.log.
 
 =head1 DESCRIPTION
 
@@ -1674,7 +1899,7 @@ Specifically, unless the documentation for a particular method says
 "this method returns thus-and-such a value", then you should not rely on
 it returning anything meaningful.
 
-A I<passing> acquintance with at least the broader details of the source
+A I<passing> acquaintance with at least the broader details of the source
 code for this class is assumed for anyone using this class as a base
 class -- especially if you're overriding existing methods, and
 B<definitely> if you're overriding linkage methods.
@@ -1691,47 +1916,9 @@ daughters, 'attributes' setting of a new empty hashref), and returns
 the object created.  (If you just said "CLASS->new()" or "CLASS->new",
 then it pretends you called "CLASS->new({})".)
 
-Currently no options for putting in hashref $options are part
-of the documented interface, but the options is here in case
-you want to add such behavior in a derived class.
+See also the comments under L</new($hashref)> for options supported in the call to new().
 
-Read on if you plan on using Tree::DAG_New as a base class.
-(Otherwise feel free to skip to the description of _init.)
-
-There are, in my mind, two ways to do object construction:
-
-Way 1: create an object, knowing that it'll have certain uninteresting
-sane default values, and then call methods to change those values to
-what you want.  Example:
-
-    $node = Tree::DAG_Node->new;
-    $node->name('Supahnode!');
-    $root->add_daughter($node);
-    $node->add_daughters(@some_others)
-
-Way 2: be able to specify some/most/all the object's attributes in
-the call to the constructor.  Something like:
-
-    $node = Tree::DAG_Node->new({
-      name => 'Supahnode!',
-      mother => $root,
-      daughters => \@some_others
-    });
-
-After some deliberation, I've decided that the second way is a Bad
-Thing.  First off, it is B<not> markedly more concise than the first
-way.  Second off, it often requires subtly different syntax (e.g.,
-\@some_others vs @some_others).  It just complicates things for the
-programmer and the user, without making either appreciably happier.
-
-See however the comments under L</new($hashref)> for options supported in the call to new().
-
-(This is not to say that options in general for a constructor are bad
--- L</random_network($options)>, discussed far below, necessarily takes options.
-But note that those are not options for the default values of
-attributes.)
-
-Anyway, if you use C<Tree::DAG_Node> as a superclass, and you add
+If you use C<Tree::DAG_Node> as a superclass, and you add
 attributes that need to be initialized, what you need to do is provide
 an _init method that calls $this->SUPER::_init($options) to use its
 superclass's _init method, and then initializes the new attributes:
@@ -1744,48 +1931,6 @@ superclass's _init method, and then initializes the new attributes:
     # Now init /my/ new attributes:
     $this->{'amigos'} = []; # for example
   }
-
-...or, as I prefer when I'm being a neat freak:
-
-  sub _init {
-    my($this, $options) = @_[0,1];
-    $this->SUPER::_init($options);
-
-    $this->_init_amigos($options);
-  }
-
-  sub _init_amigos {
-    my $this = $_[0];
-    # Or my($this,$options) = @_[0,1]; if I'm using $options
-    $this->{'amigos'} = [];
-  }
-
-
-In other words, I like to have each attribute initialized thru a
-method named _init_[attribute], which should expect the object as
-$_[0] and the the options hashref (or {} if none was given) as $_[1].
-If you insist on having your _init recognize options for setting
-attributes, you might as well have them dealt with by the appropriate
-_init_[attribute] method, like this:
-
-  sub _init {
-    my($this, $options) = @_[0,1];
-    $this->SUPER::_init($options);
-
-    $this->_init_amigos($options);
-  }
-
-  sub _init_amigos {
-    my($this,$options) = @_[0,1]; # I need options this time
-    $this->{'amigos'} = [];
-    $this->amigos(@{$options->{'amigos'}}) if $options->{'amigos'};
-  }
-
-All this bookkeeping looks silly with just one new attribute in a
-class derived straight from C<Tree::DAG_Node>, but if there's lots of new
-attributes running around, and if you're deriving from a class derived
-from a class derived from C<Tree::DAG_Node>, then tidy
-stratification/modularization like this can keep you sane.
 
 =item the constructor $obj->new() or $obj->new($options)
 
@@ -1825,7 +1970,7 @@ to N2; it also means that N1 stops being anything else's daughter as
 it becomes N2's daughter.
 
 If you try to make a node its own mother, a fatal error results.  If
-you try to take one of a a node N1's ancestors and make it also a
+you try to take one of a node N1's ancestors and make it also a
 daughter of N1, a fatal error results.  A fatal error results if
 anything in LIST isn't a node object.
 
@@ -1870,7 +2015,7 @@ An exact synonym for L</add_right_sisters(LIST)>.
 
 =head2 add_right_sisters(LIST)
 
-Just like add_left_sisters (which see), except that the the elements
+Just like add_left_sisters (which see), except that the elements
 in LIST (in that order) as immediate B<right> sisters of $node;
 
 In other words, given that B's mother's daughter-list is (A,B,C,D),
@@ -1925,7 +2070,7 @@ Also note that the address of a node in a tree is meaningful only in
 that tree as currently structured.
 
 (Consider how ($address1 cmp $address2) may be magically meaningful
-to you, if you mant to figure out what nodes are to the right of what
+to you, if you meant to figure out what nodes are to the right of what
 other nodes.)
 
 =head2 ancestors()
@@ -1964,7 +2109,7 @@ to {}.)  Instead you can just do...
 =head2 clear_daughters()
 
 This unlinks all $mother's daughters.
-Returns the the list of what used to be $mother's daughters.
+Returns the list of what used to be $mother's daughters.
 
 Not to be confused with L</remove_daughters(LIST)>.
 
@@ -1995,6 +2140,22 @@ If the nodes aren't all in the same tree, the answer is undef.
 
 As a degenerate case, if LIST is empty, returns $node's mother;
 that'll be undef if $node is root.
+
+=head2 copy($option)
+
+Returns a copy of the calling node (the invocant). E.g.: my($copy) = $node -> copy;
+
+$option is a hashref of options, with these (key => value) pairs:
+
+=over 4
+
+=item o no_attribute_copy => $Boolean
+
+If set to 1, do not copy the node's attributes.
+
+If not specified, defaults to 0, which copies attributes.
+
+=back
 
 =head2 copy_at_and_under()
 
@@ -2027,6 +2188,14 @@ Options you specify are passed down to calls to $node->copy.
 =head2 daughters()
 
 This returns the (possibly empty) list of daughters for $node.
+
+=head2 decode_lol($lol)
+
+Returns an arrayref having decoded the deeply nested structure $lol.
+
+$lol will be the output of either tree_to_lol() or tree_to_simple_lol().
+
+See scripts/read.tree.pl, and it's output file scripts/read.tree.log.
 
 =head2 delete_tree()
 
@@ -2174,7 +2343,7 @@ I<draw_ascii_tree()> tries to save vertical space.  Defaults to 1.
 The code occasionally returns trees that are a bit cock-eyed in parts; if
 anyone can suggest a better drawing algorithm, I'd be appreciative.
 
-See also L</tree2string([$options], [$some_tree])>.
+See also L</tree2string($options, [$some_tree])>.
 
 =head2 dump_names($options)
 
@@ -2187,15 +2356,15 @@ and continuing under it.  Options are:
 
 =item o _depth -- A nonnegative number
 
-Indicating the depth to consider $node as being at (and so the generation under that is that plus one,
-etc.).  You may choose to use set _depth => scalar($node->ancestors).
+Indicating the depth to consider $node as being at (and so the generation under that is that plus
+one, etc.).  You may choose to use set _depth => scalar($node->ancestors).
 
 Default: 0.
 
 =item o tick -- a string to preface each entry with
 
 This string goes between the indenting-spacing and the node's name.  You
-may prefer "*" or "-> " or someting.
+may prefer "*" or "-> " or something.
 
 Default: ''.
 
@@ -2210,11 +2379,7 @@ Default: ' ' x 2.
 The output is not printed, but is returned as a list, where each
 item is a line, with a "\n" at the end.
 
-Note: Names are converted to a printable form using the undocumented function _dump_quote().
-
-=head2 format_node([$options], [$node])
-
-Here, [] represent optional parameters.
+=head2 format_node($options, $node)
 
 Returns a string consisting of the node's name and, optionally, it's attributes.
 
@@ -2222,9 +2387,9 @@ Possible keys in the $options hashref:
 
 =over 4
 
-=item o no_attributes
+=item o no_attributes => $Boolean
 
-If given a true value, the node's attributes are not included in the string returned.
+If 1, the node's attributes are not included in the string returned.
 
 Default: 0 (include attributes).
 
@@ -2232,7 +2397,7 @@ Default: 0 (include attributes).
 
 Calls L</hashref2string($hashref)>.
 
-Called by L</node2string([$options], [$node])>.
+Called by L</node2string($options, $node, $vert_dashes)>.
 
 You would not normally call this method.
 
@@ -2274,11 +2439,11 @@ $node->generation_under($node) returns just $node.
 If you call $node->generation_under($node) but NODE2 is not $node or an
 ancestor of $node, it behaves as if you called just $node->generation().
 
-head2 hashref2string($hashref)
+=head2 hashref2string($hashref)
 
 Returns the given hashref as a string.
 
-Called by L</format_node([$options], [$node])>.
+Called by L</format_node($options, $node)>.
 
 =head2 is_daughter_of($node2)
 
@@ -2442,9 +2607,9 @@ daughter list, etc.
 
 As you'd expect for a constructor, it returns the node-object created.
 
-# Note that if you radically change 'mother'/'daughters' bookkeeping,
-# you may have to change this routine, since it's one of the places
-# that directly writes to 'daughters' and 'mother'.
+Note that if you radically change 'mother'/'daughters' bookkeeping,
+you may have to change this routine, since it's one of the places
+that directly writes to 'daughters' and 'mother'.
 
 =head2 new_daughter_left()
 
@@ -2453,11 +2618,11 @@ As you'd expect for a constructor, it returns the node-object created.
 This is just like $mother->new_daughter, but adds the new daughter
 to the left (start) of $mother's daughter list.
 
-# Note that if you radically change 'mother'/'daughters' bookkeeping,
-# you may have to change this routine, since it's one of the places
-# that directly writes to 'daughters' and 'mother'.
+Note that if you radically change 'mother'/'daughters' bookkeeping,
+you may have to change this routine, since it's one of the places
+that directly writes to 'daughters' and 'mother'.
 
-=head2 node2string($options, $t, $vert_dashes)
+=head2 node2string($options, $node, $vert_dashes)
 
 Returns a string of the node's name and attributes, with a leading indent, suitable for printing.
 
@@ -2465,17 +2630,23 @@ Possible keys in the $options hashref:
 
 =over 4
 
-=item o no_attributes
+=item o no_attributes => $Boolean
 
-If given a true value, the node's attributes are not included in the string returned.
+If 1, the node's attributes are not included in the string returned.
 
 Default: 0 (include attributes).
 
 =back
 
-Calls L</format_node([$options], [$node])>.
+Ignore the parameter $vert_dashes. The code uses it as temporary storage.
 
-Called by L</tree2string([$options], [$some_tree])>.
+Calls L</format_node($options, $node)>.
+
+Called by L</tree2string($options, [$some_tree])>.
+
+=head2 quote_name($name)
+
+Returns the string "'$name'", which is used in various methods for outputting node names.
 
 =head2 random_network($options)
 
@@ -2498,7 +2669,8 @@ It takes four options:
 
 =over 4
 
-=item o max_node_count -- maximum number of nodes this tree will be allowed to have (counting the root)
+=item o max_node_count -- maximum number of nodes this tree will be allowed to have (counting the
+root)
 
 Default: 25.
 
@@ -2521,6 +2693,39 @@ Default: 4.
 
 =back
 
+=head2 read_attributes($s)
+
+Parses the string $s and extracts the name and attributes, assuming the format is as generated by
+L</tree2string($options, [$some_tree])>.
+
+This bascially means the attribute string was generated by L</hashref2string($hashref)>.
+
+Attributes may be absent, in which case they default to {}.
+
+Returns a new node with this name and these attributes.
+
+This method is for use by L</read_tree($file_name)>.
+
+See t/tree.without.attributes.txt and t/tree.with.attributes.txt for sample data.
+
+=head2 read_tree($file_name)
+
+Returns the root of the tree read from $file_name.
+
+The file must have been written by re-directing the output of
+L</tree2string($options, [$some_tree])> to a file, since it makes assumptions about the format
+of the stringified attributes.
+
+read_tree() works with utf-8 data. See t/read.tree.t and t/tree.utf8.attributes.txt.
+
+Note: To call this method you need a caller. It'll be a tree of 1 node. The reason is that inside
+this method it calls various other methods, and for these calls it needs $self. That way, those
+methods can be called from anywhere, and not just from within read_tree().
+
+For reading and writing trees to databases, see L<Tree::DAG_Node::Persist>.
+
+Calls L</string2hashref($s)>.
+
 =head2 remove_daughter(LIST)
 
 An exact synonym for L</remove_daughters(LIST)>.
@@ -2540,7 +2745,7 @@ and replacing it with the items in LIST.  This returns a list consisting
 of $node followed by LIST, i.e., the nodes that replaced it.
 
 LIST can include $node itself (presumably at most once).  LIST can
-also be empty-list.  However, if any items in LIST are sisters to
+also be the empty list.  However, if any items in LIST are sisters to
 $node, they are ignored, and are not in the copy of LIST passed as the
 return value.
 
@@ -2572,7 +2777,7 @@ affected my replace_with -- they can be affected in this case:
   $node->replace_with($N1, $N2, $N3);
 
 As a side affect of attaching $N1 and $N2 to $node's mother, they're
-unlinked from their parents ($node, and $N1, replectively).
+unlinked from their parents ($node, and $N1, respectively).
 But N3's daughter list is unaffected.
 
 In other words, this method does what it has to, as you'd expect it
@@ -2595,9 +2800,9 @@ $node->replace_with_daughters is a more common operation in
 tree-wrangling than $node->replace_with(LIST), so deserves a named
 method of its own, but that's just me.)
 
-# Note that if you radically change 'mother'/'daughters' bookkeeping,
-# you may have to change this routine, since it's one of the places
-# that directly writes to 'daughters' and 'mother'.
+Note that if you radically change 'mother'/'daughters' bookkeeping,
+you may have to change this routine, since it's one of the places
+that directly writes to 'daughters' and 'mother'.
 
 =head2 right_sister()
 
@@ -2680,12 +2885,27 @@ Returns a list of all nodes (going left-to-right) that have the same
 mother as $node -- B<not including> $node itself.  If $node is root,
 this returns empty-list.
 
+=head2 string2hashref($s)
+
+Returns the hashref built from the string.
+
+The string is expected to be something like
+'{AutoCommit => '1', PrintError => "0", ReportError => 1}'.
+
+The empty string is returned as {}.
+
+Called by L</read_tree($file_name)>.
+
 =head2 tree_to_lol()
 
 Returns that tree (starting at $node) represented as a LoL, like what
 $lol, above, holds.  (This is as opposed to L</tree_to_lol_notation($options)>,
 which returns the viewable code like what gets evaluated and stored in
 $lol, above.)
+
+Undefined node names are returned as the string 'undef'.
+
+See also L</decode_lol($lol)>.
 
 Lord only knows what you use this for -- maybe for feeding to
 Data::Dumper, in case L</tree_to_lol_notation($options)> doesn't do just what you
@@ -2706,7 +2926,7 @@ this:
   print $tree->tree_to_lol_notation, "\n";
 
 prints the following (which I've broken over two lines for sake of
-printablitity of documentation):
+printability of documentation):
 
   [[[['Det:The'], [['dog'], 'N'], 'NP'], [["/with rabies\x5c"],
   'PP'], 'NP'], [['died'], 'VP'], 'S'],
@@ -2718,7 +2938,7 @@ Doing this:
 prints the same content, just spread over many lines, and prettily
 indented.
 
-Note: Names are converted to a printable form using the undocumented function _dump_quote().
+Undefined node names are returned as the string 'undef'.
 
 =head2 tree_to_simple_lol()
 
@@ -2732,16 +2952,20 @@ the same as $node->name.
 
 Compare to tree_to_simple_lol_notation.
 
+Undefined node names are returned as the string 'undef'.
+
+See also L</decode_lol($lol)>.
+
 =head2 tree_to_simple_lol_notation($options)
 
 A simple-LoL version of tree_to_lol_notation (which see); takes the
 same options.
 
-Note: Names are converted to a printable form using the undocumented function _dump_quote().
+Undefined node names are returned as the string 'undef'.
 
-=head2 tree2string([$options], [$some_tree])
+=head2 tree2string($options, [$some_tree])
 
-Here, the [] represent optional parameters.
+Here, the [] represent an optional parameter.
 
 Returns an arrayref of lines, suitable for printing.
 
@@ -2749,59 +2973,53 @@ Draws a nice ASCII-art representation of the tree structure.
 
 The tree looks like:
 
-	Root. Attributes: {# => "0"}
-	   |---I. Attributes: {# => "1"}
-	   |   |---J. Attributes: {# => "3"}
-	   |   |   |---K. Attributes: {# => "3"}
-	   |   |---J. Attributes: {# => "4"}
-	   |       |---L. Attributes: {# => "5"}
-	   |           |---M. Attributes: {# => "5"}
-	   |               |---N. Attributes: {# => "5"}
-	   |                   |---O. Attributes: {# => "5"}
-	   |---H. Attributes: {# => "2"}
-	   |   |---J. Attributes: {# => "3"}
-	   |   |   |---K. Attributes: {# => "3"}
-	   |   |---J. Attributes: {# => "4"}
-	   |       |---L. Attributes: {# => "5"}
-	   |           |---M. Attributes: {# => "5"}
-	   |               |---N. Attributes: {# => "5"}
-	   |                   |---O. Attributes: {# => "5"}
-	   |---D. Attributes: {# => "6"}
-	   |   |---F. Attributes: {# => "8"}
-	   |       |---G. Attributes: {# => "8"}
-	   |---E. Attributes: {# => "7"}
-	   |   |---F. Attributes: {# => "8"}
-	   |       |---G. Attributes: {# => "8"}
-	   |---B. Attributes: {# => "9"}
-	       |---C. Attributes: {# => "9"}
+	Root. Attributes: {}
+	    |--- Â. Attributes: {# => "ÂÂ"}
+	    |    |--- â. Attributes: {# => "ââ"}
+	    |    |    |--- É. Attributes: {# => "ÉÉ"}
+	    |    |--- ä. Attributes: {# => "ää"}
+	    |    |--- é. Attributes: {# => "éé"}
+	    |         |--- Ñ. Attributes: {# => "ÑÑ"}
+	    |              |--- ñ. Attributes: {# => "ññ"}
+	    |                   |--- Ô. Attributes: {# => "ÔÔ"}
+	    |                        |--- ô. Attributes: {# => "ôô"}
+	    |                        |--- ô. Attributes: {# => "ôô"}
+	    |--- ß. Attributes: {# => "ßß"}
+	         |--- ®. Attributes: {# => "®®"}
+	         |    |--- ©. Attributes: {# => "©©"}
+	         |--- £. Attributes: {# => "££"}
+	         |--- €. Attributes: {# => "€€"}
+	         |--- √. Attributes: {# => "√√"}
+	         |--- ×xX. Attributes: {# => "×xX×xX"}
+	              |--- í. Attributes: {# => "íí"}
+	              |--- ú. Attributes: {# => "úú"}
+	              |--- «. Attributes: {# => "««"}
+	              |--- ». Attributes: {# => "»»"}
 
 Or, without attributes:
 
 	Root
-	   |---I
-	   |   |---J
-	   |   |   |---K
-	   |   |---J
-	   |       |---L
-	   |           |---M
-	   |               |---N
-	   |                   |---O
-	   |---H
-	   |   |---J
-	   |   |   |---K
-	   |   |---J
-	   |       |---L
-	   |           |---M
-	   |               |---N
-	   |                   |---O
-	   |---D
-	   |   |---F
-	   |       |---G
-	   |---E
-	   |   |---F
-	   |       |---G
-	   |---B
-	       |---C
+	    |--- Â
+	    |    |--- â
+	    |    |    |--- É
+	    |    |--- ä
+	    |    |--- é
+	    |         |--- Ñ
+	    |              |--- ñ
+	    |                   |--- Ô
+	    |                        |--- ô
+	    |                        |--- ô
+	    |--- ß
+	         |--- ®
+	         |    |--- ©
+	         |--- £
+	         |--- €
+	         |--- √
+	         |--- ×xX
+	              |--- í
+	              |--- ú
+	              |--- «
+	              |--- »
 
 See scripts/cut.and.paste.subtrees.pl.
 
@@ -2817,15 +3035,15 @@ Possible keys in the $options hashref (which defaults to {}):
 
 =over 4
 
-=item o no_attributes
+=item o no_attributes => $Boolean
 
-If given a true value, the node's attributes are not included in the string returned.
+If 1, the node's attributes are not included in the string returned.
 
 Default: 0 (include attributes).
 
 =back
 
-Calls L</node2string($options, $t, $vert_dashes)>.
+Calls L</node2string($options, $node, $vert_dashes)>.
 
 See also L</draw_ascii_tree([$options])>.
 
@@ -2848,7 +3066,7 @@ This is what I<walk_down()> does, in pseudocode form:
 
 =over 4
 
-=item o Starting pount
+=item o Starting point
 
 Start at the $node given.
 
@@ -2889,7 +3107,7 @@ Note that if you don't specify I<_depth>, it effectively defaults to
 0.  You should set it to scalar($node->ancestors) if you want
 I<_depth> to reflect the true depth-in-the-tree for the nodes called,
 instead of just the depth below $node.  (If $node is the root, there's
-difference, of course.)
+no difference, of course.)
 
 And B<by the way>, it's a bad idea to modify the tree from the callback.
 Unpredictable things may happen.  I instead suggest having your callback
@@ -3017,8 +3235,8 @@ C<Tree::DAG_Node>, as it happens. More details: L</SEE ALSO>.
 
 =head2 How to process every node in tree?
 
-See L</walk_down($options)>. $options normally looks like, assuming we wish to pass in
-an arrayref to a stack, for example:
+See L</walk_down($options)>. $options normally looks like this, assuming we wish to pass in
+an arrayref as a stack:
 
 	my(@stack);
 
@@ -3083,16 +3301,6 @@ Because I want to list the methods in alphabetical order.
 
 Because the apostrophes in the text confused the syntax hightlighter in my editor UltraEdit.
 
-=head1 TODO
-
-=over 4
-
-=item o Copy node does not respect the no_attribute_copy option
-
-This is a bug.
-
-=back
-
 =head1 SEE ALSO
 
 =over 4
@@ -3150,17 +3358,22 @@ Programs>.)
 
 =head1 MACHINE-READABLE CHANGE LOG
 
-The file CHANGES was converted into Changelog.ini by L<Module::Metadata::Changes>.
+The file Changes was converted into Changelog.ini by L<Module::Metadata::Changes>.
+
+=head1 REPOSITORY
+
+L<https://github.com/ronsavage/Tree-DAG_Node>
 
 =head1 SUPPORT
 
 Email the author, or log a bug on RT:
 
-L<https://rt.cpan.org/Public/Dist/Display.html?Name=Tree::DAG_Node>.
+L<https://rt.cpan.org/Public/Dist/Display.html?Name=Tree-DAG_Node>.
 
 =head1 ACKNOWLEDGEMENTS
 
-The code to print the tree, in tree2string(), was adapted from L<Forest::Tree::Writer::ASCIIWithBranches>.
+The code to print the tree, in tree2string(), was adapted from
+L<Forest::Tree::Writer::ASCIIWithBranches> by the dread Stevan Little.
 
 =head1 MAINTAINER
 
@@ -3178,8 +3391,10 @@ Sean M. Burke, C<< <sburke@cpan.org> >>
 
 Copyright 1998-2001, 2004, 2007 by Sean M. Burke and David Hand.
 
-This program is free software. It is released under the Artistic License 2.0.
-See L<http://opensource.org/licenses/Artistic-2.0>.
+This Program of ours is 'OSI Certified Open Source Software';
+you can redistribute it and/or modify it under the terms of
+The Perl License, a copy of which is available at:
+http://dev.perl.org/licenses/
 
 This program is distributed in the hope that it will be useful, but
 without any warranty; without even the implied warranty of

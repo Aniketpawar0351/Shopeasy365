@@ -4,6 +4,7 @@
  *
  * This is one of the most important components, along with the lexer.
  */
+
 declare(strict_types=1);
 
 namespace PhpMyAdmin\SqlParser;
@@ -11,6 +12,9 @@ namespace PhpMyAdmin\SqlParser;
 use PhpMyAdmin\SqlParser\Exceptions\ParserException;
 use PhpMyAdmin\SqlParser\Statements\SelectStatement;
 use PhpMyAdmin\SqlParser\Statements\TransactionStatement;
+
+use function is_string;
+use function strtoupper;
 
 /**
  * Takes multiple tokens (contained in a Lexer instance) as input and builds a
@@ -69,6 +73,7 @@ class Parser extends Core
         'REPLACE' => 'PhpMyAdmin\\SqlParser\\Statements\\ReplaceStatement',
         'SELECT' => 'PhpMyAdmin\\SqlParser\\Statements\\SelectStatement',
         'UPDATE' => 'PhpMyAdmin\\SqlParser\\Statements\\UpdateStatement',
+        'WITH' => 'PhpMyAdmin\\SqlParser\\Statements\\WithStatement',
 
         // Prepared Statements.
         // https://dev.mysql.com/doc/refman/5.7/en/sql-syntax-prepared-statements.html
@@ -366,13 +371,17 @@ class Parser extends Core
 
         $this->strict = $strict;
 
-        if ($list !== null) {
-            $this->parse();
+        if ($list === null) {
+            return;
         }
+
+        $this->parse();
     }
 
     /**
      * Builds the parse trees.
+     *
+     * @throws ParserException
      */
     public function parse()
     {
@@ -421,9 +430,7 @@ class Parser extends Core
 
             // `DELIMITER` is not an actual statement and it requires
             // special handling.
-            if (($token->type === Token::TYPE_NONE)
-                && (strtoupper($token->token) === 'DELIMITER')
-            ) {
+            if (($token->type === Token::TYPE_NONE) && (strtoupper($token->token) === 'DELIMITER')) {
                 // Skipping to the end of this statement.
                 $list->getNextOfType(Token::TYPE_DELIMITER);
                 $prevLastIdx = $list->idx;
@@ -439,20 +446,20 @@ class Parser extends Core
             // Statements can start with keywords only.
             // Comments, whitespaces, etc. are ignored.
             if ($token->type !== Token::TYPE_KEYWORD) {
-                if (($token->type !== Token::TYPE_COMMENT)
+                if (
+                    ($token->type !== Token::TYPE_COMMENT)
                     && ($token->type !== Token::TYPE_WHITESPACE)
                     && ($token->type !== Token::TYPE_OPERATOR) // `(` and `)`
                     && ($token->type !== Token::TYPE_DELIMITER)
                 ) {
-                    $this->error(
-                        'Unexpected beginning of statement.',
-                        $token
-                    );
+                    $this->error('Unexpected beginning of statement.', $token);
                 }
+
                 continue;
             }
 
-            if (($token->keyword === 'UNION') ||
+            if (
+                ($token->keyword === 'UNION') ||
                     ($token->keyword === 'UNION ALL') ||
                     ($token->keyword === 'UNION DISTINCT') ||
                     ($token->keyword === 'EXCEPT') ||
@@ -468,11 +475,9 @@ class Parser extends Core
                     // A statement is considered recognized if the parser
                     // is aware that it is a statement, but it does not have
                     // a parser for it yet.
-                    $this->error(
-                        'Unrecognized statement type.',
-                        $token
-                    );
+                    $this->error('Unrecognized statement type.', $token);
                 }
+
                 // Skipping to the end of this statement.
                 $list->getNextOfType(Token::TYPE_DELIMITER);
                 $prevLastIdx = $list->idx;
@@ -505,7 +510,8 @@ class Parser extends Core
             $prevLastIdx = $list->idx;
 
             // Handles unions.
-            if (! empty($unionType)
+            if (
+                ! empty($unionType)
                 && ($lastStatement instanceof SelectStatement)
                 && ($statement instanceof SelectStatement)
             ) {
@@ -556,13 +562,11 @@ class Parser extends Core
                         // Even though an error occurred, the query is being
                         // saved.
                         $this->statements[] = $statement;
-                        $this->error(
-                            'No transaction was previously started.',
-                            $token
-                        );
+                        $this->error('No transaction was previously started.', $token);
                     } else {
                         $lastTransaction->end = $statement;
                     }
+
                     $lastTransaction = null;
                 }
 
@@ -580,6 +584,7 @@ class Parser extends Core
             } else {
                 $this->statements[] = $statement;
             }
+
             $lastStatement = $statement;
         }
     }
@@ -593,7 +598,7 @@ class Parser extends Core
      *
      * @throws ParserException throws the exception, if strict mode is enabled.
      */
-    public function error($msg, Token $token = null, $code = 0)
+    public function error($msg, ?Token $token = null, $code = 0)
     {
         $error = new ParserException(
             Translator::gettext($msg),

@@ -26,7 +26,7 @@ use warnings;
 use base 'Template::Base';
 use Template::Constants;
 
-our $VERSION = 2.79;
+our $VERSION = '3.009';
 our $DEBUG   = 0 unless defined $DEBUG;
 our $ERROR   = '';
 our ($COMPERR, $AUTOLOAD, $UNICODE);
@@ -72,9 +72,8 @@ sub new {
         $COMPERR = '';
 
         # DON'T LOOK NOW! - blindly untainting can make you go blind!
-        $block =~ /(.*)/s;
-        $block = $1;
-        
+        $block = each %{ { $block => undef } } if ${^TAINT};    #untaint
+
         $block = eval $block;
         return $class->error($@)
             unless defined $block;
@@ -115,7 +114,7 @@ sub block {
 # blocks()
 #
 # Returns a reference to a hash array containing any BLOCK definitions 
-# from the template.  The hash keys are the BLOCK nameand the values
+# from the template.  The hash keys are the BLOCK name and the values
 # are references to Template::Document objects.  Returns 0 (# an empty hash)
 # if no blocks are defined.
 #------------------------------------------------------------------------
@@ -243,12 +242,10 @@ sub as_perl {
     my ($class, $content) = @_;
     my ($block, $defblocks, $metadata) = @$content{ qw( BLOCK DEFBLOCKS METADATA ) };
 
-    $block =~ s/\n(?!#line)/\n    /g;
     $block =~ s/\s+$//;
 
     $defblocks = join('', map {
         my $code = $defblocks->{ $_ };
-        $code =~ s/\n(?!#line)/\n        /g;
         $code =~ s/\s*$//;
         "        '$_' => $code,\n";
     } keys %$defblocks);
@@ -295,7 +292,7 @@ sub write_perl_file {
     my ($fh, $tmpfile);
     
     return $class->error("invalid filename: $file")
-        unless $file =~ /^(.+)$/s;
+        unless defined $file && length $file;
 
     eval {
         require File::Temp;
@@ -495,7 +492,7 @@ templates) then the L<Template::Parser> module calls this subroutine before
 calling the L<new()> constructor.  At this stage, the parser has a
 representation of the template as text strings containing Perl code.  We can
 write that to a file, enclosed in a small wrapper which will allow us to
-susequently C<require()> the file and have Perl parse and compile it into a
+subsequently C<require()> the file and have Perl parse and compile it into a
 C<Template::Document>.  Thus we have persistence of compiled templates.
 
 =head1 INTERNAL FUNCTIONS
@@ -519,7 +516,7 @@ Andy Wardley E<lt>abw@wardley.orgE<gt> L<http://wardley.org/>
 
 =head1 COPYRIGHT
 
-Copyright (C) 1996-2012 Andy Wardley.  All Rights Reserved.
+Copyright (C) 1996-2013 Andy Wardley.  All Rights Reserved.
 
 This module is free software; you can redistribute it and/or
 modify it under the same terms as Perl itself.

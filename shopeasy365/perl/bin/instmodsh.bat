@@ -27,6 +27,7 @@ goto endofperl
 #!/usr/bin/perl -w
 #line 29
 
+BEGIN { pop @INC if $INC[-1] eq '.' }
 use strict;
 use IO::File;
 use ExtUtils::Packlist;
@@ -109,8 +110,8 @@ sub list_installed {
         print("$class files in $module are:\n   ",
               join("\n   ", @files), "\n");
     }
-    else { 
-        print($@); 
+    else {
+        print($@);
     }
 };
 
@@ -126,8 +127,8 @@ sub list_directories {
         print("$class directories in $module are:\n   ",
               join("\n   ", @dirs), "\n");
     }
-    else { 
-        print($@); 
+    else {
+        print($@);
     }
 }
 

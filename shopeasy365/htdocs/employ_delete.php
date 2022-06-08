@@ -44,7 +44,7 @@ border-radius: 0.6rem;
   <label for="d_id">Employ Id</label>
   <input type="number" class="form-control" id="exampleInputEmail1"  name="d_id" required>
   </div>
-  <button type="submit" class="btn btn-primary" name="submit_d">Delete Product</button>
+  <button type="submit" class="btn btn-primary" name="submit_d">Delete Employee</button>
   </form>
   </div>
 <br>

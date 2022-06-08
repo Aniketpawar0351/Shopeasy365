@@ -1,3 +1,5 @@
+use strict;
+
 =head1 NAME
 
 DBD::ODBC::TO_DO - Things to do in DBD::ODBC
@@ -23,10 +25,10 @@ $Revision: 10667 $
 
   There is a Columns private ODBC method which is not documented.
 
-  Add support for sending lobs in chunks instead of all in one go. Although
-    DBD::ODBC uses SQLParamData and SQLPutData internally they are not exposed
-    so anyone binding a lob has to have all of it available before it can
-    be bound.
+  Add support for sending lobs in chunks instead of all in one
+    go. Although DBD::ODBC uses SQLParamData and SQLPutData internally
+    they are not exposed so anyone binding a lob has to have all of it
+    available before it can be bound.
 
   Why does level 15 tracing of any DBD::ODBC script show alot of these:
     !!DBD::ODBC unsupported attribute passed (PrintError)

@@ -1,11 +1,10 @@
 package Module::Build::PPMMaker;
 
 use strict;
+use warnings;
 use Config;
-use vars qw($VERSION);
-use IO::File;
 
-$VERSION = '0.4003';
+our $VERSION = '0.4231';
 $VERSION = eval $VERSION;
 
 # This code is mostly borrowed from ExtUtils::MM_Unix 6.10_03, with a
@@ -57,11 +56,11 @@ PPD
 
   foreach my $type (qw(requires)) {
     my $prereq = $build->$type();
-    while (my ($modname, $spec) = each %$prereq) {
+    foreach my $modname (sort keys %$prereq) {
       next if $modname eq 'perl';
 
       my $min_version = '0.0';
-      foreach my $c ($build->_parse_conditions($spec)) {
+      foreach my $c ($build->_parse_conditions($prereq->{$modname})) {
         my ($op, $version) = $c =~ /^\s*  (<=?|>=?|==|!=)  \s*  ([\w.]+)  \s*$/x;
 
         # This is a nasty hack because it fails if there is no >= op
@@ -100,12 +99,11 @@ EOF
 EOF
 
   my $ppd_file = "$dist{name}.ppd";
-  my $fh = IO::File->new(">$ppd_file")
+  open(my $fh, '>', $ppd_file)
     or die "Cannot write to $ppd_file: $!";
 
-  my $io_file_ok = eval { IO::File->VERSION(1.13); 1 };
-  $fh->binmode(":utf8")
-    if $io_file_ok && $fh->can('binmode') && $] >= 5.008 && $Config{useperlio};
+  binmode($fh, ":utf8")
+    if $] >= 5.008 && $Config{useperlio};
   print $fh $ppd;
   close $fh;
 

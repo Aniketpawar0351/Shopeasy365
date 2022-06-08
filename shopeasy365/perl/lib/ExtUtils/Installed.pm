@@ -1,7 +1,6 @@
+use strict;
 package ExtUtils::Installed;
 
-use 5.00503;
-use strict;
 #use warnings; # XXX requires 5.6
 use Carp qw();
 use ExtUtils::Packlist;
@@ -16,8 +15,7 @@ my $DOSISH = ($^O =~ /^(MSWin\d\d|os2|dos|mint)$/);
 
 require VMS::Filespec if $Is_VMS;
 
-use vars qw($VERSION);
-$VERSION = '1.999002';
+our $VERSION = '2.20';
 $VERSION = eval $VERSION;
 
 sub _is_prefix {
@@ -309,7 +307,7 @@ sub version {
     return($self->{$module}{version});
 }
 
-sub debug_dump {
+sub _debug_dump {
     my ($self, $module) = @_;
     $self= $self->new(default=>1) if !ref $self;
     local $self->{":private:"}{Config};
@@ -403,7 +401,7 @@ search for installed modules. For instance
     my $installed =
              ExtUtils::Installed->new(extra_libs=>["/my/lib/path"]);
 
-This should only be necessary if C</my/lib/path> is not in PERL5LIB.
+This should only be necessary if F</my/lib/path> is not in PERL5LIB.
 
 Finally there is the 'default', and the related 'default_get' and 'default_set'
 options. These options control the "default" object which is provided by the

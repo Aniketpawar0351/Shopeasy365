@@ -6,7 +6,7 @@ XML::LibXML::Parser - Parsing XML Data with XML::LibXML
 
 
 
-  use XML::LibXML 1.70;
+  use XML::LibXML '1.70';
 
   # Parser constructor
 
@@ -128,7 +128,7 @@ have to create a parser instance before you can parse any XML data.
 Create a new XML and HTML parser instance. Each parser instance holds default
 values for various parser options. Optionally, one can pass a hash reference or
 a list of option => value pairs to set a different default set of options.
-Unless specified otherwise, the options C<<<<<< load_ext_dtd >>>>>>, C<<<<<< expand_entities >>>>>>, and C<<<<<< huge >>>>>> are set to 1. See L<<<<<< Parser Options >>>>>> for a list of libxml2 parser's options.
+Unless specified otherwise, the options C<<<<<< load_ext_dtd >>>>>>, and C<<<<<< expand_entities >>>>>> are set to 1. See L<<<<<< Parser Options >>>>>> for a list of libxml2 parser's options.
 
 
 
@@ -174,13 +174,17 @@ eval{} block
 
 
 This function is available since XML::LibXML 1.70. It provides easy to use
-interface to the XML parser that parses given file (or URL), string, or input
-stream to a DOM tree. The arguments can be passed in a HASH reference or as
-name => value pairs. The function can be called as a class method or an object
-method. In both cases it internally creates a new parser instance passing the
-specified parser options; if called as an object method, it clones the original
-parser (preserving its settings) and additionally applies the specified options
-to the new parser. See the constructor C<<<<<< new >>>>>> and L<<<<<< Parser Options >>>>>> for more information.
+interface to the XML parser that parses given file (or non-HTTPS URL), string,
+or input stream to a DOM tree. The arguments can be passed in a HASH reference
+or as name => value pairs. The function can be called as a class method or an
+object method. In both cases it internally creates a new parser instance
+passing the specified parser options; if called as an object method, it clones
+the original parser (preserving its settings) and additionally applies the
+specified options to the new parser. See the constructor C<<<<<< new >>>>>> and L<<<<<< Parser Options >>>>>> for more information.
+
+Note that, due to a limitation in the underlying libxml2 library, this call
+does not recognize HTTPS-based URLs. (It will treat an HTTPS URL as a filename,
+likely throwing a "No such file or directory" exception.)
 
 
 =item load_html
@@ -230,8 +234,8 @@ with the push parser interface, this function should not be used anymore.
 =back
 
 By default XML::LibXML does not process XInclude tags within an XML Document
-(see options section below). XML::LibXML allows to post process a document to
-expand XInclude tags.
+(see options section below). XML::LibXML allows one to post-process a document
+to expand XInclude tags.
 
 =over 4
 
@@ -269,8 +273,8 @@ This is an alias to process_xincludes, but through a JAVA like function name.
   $doc = $parser->parse_file( $xmlfilename );
 
 This function parses an XML document from a file or network; $xmlfilename can
-be either a filename or an URL. Note that for parsing files, this function is
-the fastest choice, about 6-8 times faster then parse_fh().
+be either a filename or a (non-HTTPS) URL. Note that for parsing files, this
+function is the fastest choice, about 6-8 times faster then parse_fh().
 
 
 =item parse_fh
@@ -308,7 +312,7 @@ function.
   $doc = $parser->parse_html_file( $htmlfile, \%opts );
 
 Similar to parse_file() but parses HTML (strict) documents; $htmlfile can be
-filename or URL.
+filename or (non-HTTPS) URL.
 
 An optional second argument can be used to pass some options to the HTML parser
 as a HASH reference. See options labeled with HTML in L<<<<<< Parser Options >>>>>>.
@@ -535,15 +539,15 @@ If skipDTD is defined and not '0', an existing DTD would not be serialized with
 the document.
 
 If setTagCompression is defined and not '0' empty tags are displayed as open
-and closing tags rather than the shortcut. For example the empty tag I<<<<<< foo >>>>>> will be rendered as I<<<<<< <foo></foo> >>>>>> rather than I<<<<<< <foo/> >>>>>>.
+and closing tags rather than the shortcut. For example the empty tag I<<<<<< foo >>>>>> will be rendered as I<<<<<< E<lt>fooE<gt>E<lt>/fooE<gt> >>>>>> rather than I<<<<<< E<lt>foo/E<gt> >>>>>>.
 
 
 =head1 PARSER OPTIONS
 
 Handling of libxml2 parser options has been unified and improved in XML::LibXML
 1.70. You can now set default options for a particular parser instance by
-passing them to the constructor as C<<<<<< XML::LibXML->new({name=>value, ...}) >>>>>> or C<<<<<< XML::LibXML->new(name=>value,...) >>>>>>. The options can be queried and changed using the following methods (pre-1.70
-interfaces such as C<<<<<< $parser->load_ext_dtd(0) >>>>>> also exist, see below):
+passing them to the constructor as C<<<<<< XML::LibXML-E<gt>new({name=E<gt>value, ...}) >>>>>> or C<<<<<< XML::LibXML-E<gt>new(name=E<gt>value,...) >>>>>>. The options can be queried and changed using the following methods (pre-1.70
+interfaces such as C<<<<<< $parser-E<gt>load_ext_dtd(0) >>>>>> also exist, see below):
 
 =over 4
 
@@ -589,7 +593,7 @@ Each of the flags listed below is labeled
 
 =item /parser/
 
-if it can be used with a C<<<<<< XML::LibXML >>>>>> parser object (i.e. passed to C<<<<<< XML::LibXML->new >>>>>>, C<<<<<< XML::LibXML->set_option >>>>>>, etc.)
+if it can be used with a C<<<<<< XML::LibXML >>>>>> parser object (i.e. passed to C<<<<<< XML::LibXML-E<gt>new >>>>>>, C<<<<<< XML::LibXML-E<gt>set_option >>>>>>, etc.)
 
 
 =item /html/
@@ -829,7 +833,12 @@ not fixup XINCLUDE xml#base URIS; possible values are 0 and 1
 /parser, html, reader/
 
 relax any hardcoded limit from the parser; possible values are 0 and 1. Unless
-specified, XML::LibXML sets this option to 1.
+specified, XML::LibXML sets this option to 0.
+
+Note: the default value for this option was changed to protect against denial
+of service through entity expansion attacks. Before enabling the option ensure
+you have taken alternative measures to protect your application against this
+type of attack.
 
 
 =item gdome
@@ -840,9 +849,9 @@ THIS OPTION IS EXPERIMENTAL!
 
 Although quite powerful, XML::LibXML's DOM implementation is incomplete with
 respect to the DOM level 2 or level 3 specifications. XML::GDOME is based on
-libxml2 as well and and provides a rather complete DOM implementation by
-wrapping libgdome. This flag allows you to make use of XML::LibXML's full
-parser options and XML::GDOME's DOM implementation at the same time.
+libxml2 as well, and provides a rather complete DOM implementation by wrapping
+libgdome. This flag allows you to make use of XML::LibXML's full parser options
+and XML::GDOME's DOM implementation at the same time.
 
 To make use of this function, one has to install libgdome and configure
 XML::LibXML to use this library. For this you need to rebuild XML::LibXML!
@@ -979,7 +988,7 @@ Petr Pajas
 
 =head1 VERSION
 
-2.0014
+2.0206
 
 =head1 COPYRIGHT
 
@@ -990,3 +999,10 @@ Petr Pajas
 2006-2009, Petr Pajas.
 
 =cut
+
+
+=head1 LICENSE
+
+This program is free software; you can redistribute it and/or modify it under
+the same terms as Perl itself.
+

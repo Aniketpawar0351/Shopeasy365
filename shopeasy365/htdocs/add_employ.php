@@ -127,6 +127,7 @@ if(isset($_POST['Esubmit'])){
 
   if(in_array($imageFileType,$extensions_arr)&&($_FILES["Eimg1"]["size"]<150000)){
     $sql5=mysqli_query($con,"INSERT INTO $table_name11 (e_id,e_name, e_email, e_phone ,e_type,e_salary,e_address,e_img,e_gender,e_date) VALUES(NULL,'$Ename','$Eemail','$Ephone','$Etype','$Esalary','$Eaddress','$name','$Egender','$Edate')");
+    $Ename = str_replace(' ', '_', $Ename);
     $sql7=mysqli_query($con,"ALTER TABLE `$table_name12` ADD `$Ename` VARCHAR(100) NOT NULL AFTER `a_date`");
     move_uploaded_file($_FILES['Eimg1']['tmp_name'],$target_dir.$name);
     if($sql5&&$sql7){

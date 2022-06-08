@@ -44,7 +44,7 @@ public class Client {
      * send operation has finished.
      */
     private final LinkedList<AbstractWebsocketMessage> messagesToSend =
-            new LinkedList<AbstractWebsocketMessage>();
+            new LinkedList<>();
     /**
      * If this client is currently sending a messages asynchronously.
      */
@@ -80,7 +80,8 @@ public class Client {
      * will be buffered and sent when possible.<br><br>
      *
      * This method can be called from multiple threads.
-     * @param msg
+     *
+     * @param msg The message to send
      */
     public void sendMessage(AbstractWebsocketMessage msg) {
         synchronized (messagesToSend) {
@@ -113,9 +114,9 @@ public class Client {
                             // Maybe call this method on another thread.
                             // Note that when this method is called, the RemoteEndpoint.Async
                             // is still in the process of sending data, so there probably should
-                            // be another way to abort the Websocket connection.
-                            // Ideally, there should be some abort() method that cancels the
-                            // connection immediately...
+                            // be another way to cancel the Websocket connection.
+                            // Ideally, there should be some method that cancels the connection
+                            // immediately...
                             session.close(cr);
                         } catch (IOException e) {
                             // Ignore
@@ -164,7 +165,8 @@ public class Client {
 
     /**
      * Internally sends the messages asynchronously.
-     * @param msg
+     *
+     * @param msg Message to send
      */
     private void internalSendMessageAsync(AbstractWebsocketMessage msg) {
         try {
@@ -180,11 +182,7 @@ public class Client {
                 // Close the session.
                 session.close();
             }
-        } catch (IllegalStateException ex) {
-            // Trying to write to the client when the session has
-            // already been closed.
-            // Ignore
-        } catch (IOException ex) {
+        } catch (IllegalStateException|IOException ex) {
             // Trying to write to the client when the session has
             // already been closed.
             // Ignore
@@ -206,8 +204,8 @@ public class Client {
                 // other messages.
                 // As a precaution, we close the session (e.g. if a send timeout occurred).
                 // TODO: session.close() blocks, while this handler shouldn't block.
-                // Ideally, there should be some abort() method that cancels the
-                // connection immediately...
+                // Ideally, there should be some method that cancels the connection
+                // immediately...
                 try {
                     session.close();
                 } catch (IOException ex) {

@@ -7,7 +7,7 @@ package HTML::Tree;
 use warnings;
 use strict;
 
-our $VERSION = '5.03'; # VERSION from OurPkgVersion
+our $VERSION = '5.07'; # VERSION from OurPkgVersion
 
 use HTML::TreeBuilder ();
 
@@ -48,8 +48,8 @@ HTML::Tree - build and scan parse-trees of HTML
 
 =head1 VERSION
 
-This document describes version 5.03 of
-HTML::Tree, released September 22, 2012
+This document describes version 5.07 of
+HTML::Tree, released August 31, 2017
 as part of L<HTML-Tree|HTML::Tree>.
 
 =head1 SYNOPSIS
@@ -183,7 +183,7 @@ and HTML-Tree specifically.  There's more info at:
 =head1 SOURCE REPOSITORY
 
 HTML-Tree is now maintained using Git.  The main public repository is
-L<< http://github.com/madsen/HTML-Tree >>.
+L<< https://github.com/kentfredric/HTML-Tree >>.
 
 The best way to send a patch is to make a pull request there.
 
@@ -231,7 +231,7 @@ Former maintainers:
 =back
 
 You can follow or contribute to HTML-Tree's development at
-L<< http://github.com/madsen/HTML-Tree >>.
+L<< https://github.com/kentfredric/HTML-Tree >>.
 
 =head1 COPYRIGHT AND LICENSE
 

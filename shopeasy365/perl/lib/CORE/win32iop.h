@@ -13,11 +13,7 @@
 #endif
 #endif
 
-#if defined(_MSC_VER) || defined(__MINGW32__)
-#  include <sys/utime.h>
-#else
-#  include <utime.h>
-#endif
+#include <sys/utime.h>
 
 /*
  * defines for flock emulation
@@ -68,6 +64,7 @@ DllExport  int		win32_fgetpos(FILE *pf,fpos_t *p);
 DllExport  int		win32_fsetpos(FILE *pf,const fpos_t *p);
 DllExport  void		win32_rewind(FILE *pf);
 DllExport  int		win32_tmpfd(void);
+DllExport  int		win32_tmpfd_mode(int mode);
 DllExport  FILE*	win32_tmpfile(void);
 DllExport  void		win32_abort(void);
 DllExport  int  	win32_fstat(int fd,Stat_t *sbufptr);
@@ -126,13 +123,15 @@ DllExport  void		win32_rewinddir(DIR *dirp);
 DllExport  int		win32_closedir(DIR *dirp);
 DllExport  DIR*		win32_dirp_dup(DIR *const dirp, CLONE_PARAMS *const param);
 
+DllExport  char*        win32_getenvironmentstrings(void);
+/* also see win32_freeenvironmentstrings macro */
 DllExport  char*	win32_getenv(const char *name);
 DllExport  int		win32_putenv(const char *name);
 
 DllExport  unsigned 	win32_sleep(unsigned int);
+DllExport  int		win32_pause(void);
 DllExport  int		win32_times(struct tms *timebuf);
 DllExport  unsigned 	win32_alarm(unsigned int sec);
-DllExport  int		win32_stat(const char *path, Stat_t *buf);
 DllExport  char*	win32_longpath(char *path);
 DllExport  char*	win32_ansipath(const WCHAR *path);
 DllExport  int		win32_ioctl(int i, unsigned int u, char *data);
@@ -162,6 +161,8 @@ DllExport Sighandler_t	win32_signal(int sig, Sighandler_t subcode);
 
 END_EXTERN_C
 
+/* see comment in win32_getenvironmentstrings */
+#define win32_freeenvironmentstrings(x) win32_free(x)
 #undef alarm
 #define alarm				win32_alarm
 #undef strerror
@@ -232,7 +233,13 @@ END_EXTERN_C
 #define rewind(f)		win32_rewind(f)
 #define tmpfile()		win32_tmpfile()
 #define abort()			win32_abort()
+#ifdef __MINGW32__
+#  undef fstat
+#endif
 #define fstat(fd,bufptr)   	win32_fstat(fd,bufptr)
+#ifdef __MINGW32__
+#  undef stat
+#endif
 #define stat(pth,bufptr)   	win32_stat(pth,bufptr)
 #define longpath(pth)   	win32_longpath(pth)
 #define ansipath(pth)   	win32_ansipath(pth)
@@ -295,7 +302,7 @@ END_EXTERN_C
  */
 
 #define pipe(fd)		win32_pipe((fd), 512, O_BINARY)
-#define pause()			win32_sleep((32767L << 16) + 32767)
+#define pause			win32_pause
 #define sleep			win32_sleep
 #define times			win32_times
 #define ioctl			win32_ioctl
@@ -307,6 +314,8 @@ END_EXTERN_C
 #define wait			win32_wait
 #define waitpid			win32_waitpid
 #define kill			win32_kill
+#define killpg(pid, sig)	win32_kill(pid, -(sig))
+
 
 #define opendir			win32_opendir
 #define readdir			win32_readdir

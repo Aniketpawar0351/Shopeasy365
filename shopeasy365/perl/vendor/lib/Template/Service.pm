@@ -30,7 +30,7 @@ use Scalar::Util 'blessed';
 
 use constant EXCEPTION => 'Template::Exception';
 
-our $VERSION = 2.80;
+our $VERSION = '3.009';
 our $DEBUG   = 0 unless defined $DEBUG;
 our $ERROR   = '';
 
@@ -514,7 +514,7 @@ for all uncaught exceptions.
         ERROR => 'error.html'
     });
 
-If the L<ERROR/ERRORS|Template::Manual::Config#ERROR> item is a hash reference
+If the L<ERROR or ERRORS|Template::Manual::Config#ERROR> item is a hash reference
 the keys are assumed to be exception types and the relevant template for a
 given exception will be selected. A C<default> template may be provided for
 the general case.

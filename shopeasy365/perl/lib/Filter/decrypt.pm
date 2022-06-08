@@ -1,14 +1,10 @@
 package Filter::decrypt ;
 
-require 5.002 ;
-require DynaLoader;
-use strict;
-use warnings;
-use vars qw(@ISA $VERSION);
-@ISA = qw(DynaLoader);
-$VERSION = "1.45" ;
+require 5.006 ;
+require XSLoader;
+our $VERSION = "1.60" ;
 
-bootstrap Filter::decrypt ;
+XSLoader::load('Filter::decrypt');
 1;
 __END__
 
@@ -61,7 +57,7 @@ linking it at run time with a modified Perl binary.
 =item 3.
 
 Do not build Perl with C<-DDEBUGGING>. If you do then your source can
-be retrieved with the C<-Dp> command line option. 
+be retrieved with the C<-DP> command line option. 
 
 The sample filter contains logic to detect the C<DEBUGGING> option.
 

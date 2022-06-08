@@ -14,6 +14,7 @@ namespace Symfony\Component\DependencyInjection\Compiler;
 use Symfony\Component\DependencyInjection\Alias;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\ContainerInterface;
+use Symfony\Component\DependencyInjection\Exception\InvalidArgumentException;
 use Symfony\Component\DependencyInjection\Exception\ServiceNotFoundException;
 use Symfony\Component\DependencyInjection\Reference;
 
@@ -29,7 +30,7 @@ class DecoratorServicePass implements CompilerPassInterface
     public function process(ContainerBuilder $container)
     {
         $definitions = new \SplPriorityQueue();
-        $order = PHP_INT_MAX;
+        $order = \PHP_INT_MAX;
 
         foreach ($container->getDefinitions() as $id => $definition) {
             if (!$decorated = $definition->getDecoratedService()) {
@@ -39,9 +40,9 @@ class DecoratorServicePass implements CompilerPassInterface
         }
         $decoratingDefinitions = [];
 
-        foreach ($definitions as list($id, $definition)) {
+        foreach ($definitions as [$id, $definition]) {
             $decoratedService = $definition->getDecoratedService();
-            list($inner, $renamedId) = $decoratedService;
+            [$inner, $renamedId] = $decoratedService;
             $invalidBehavior = $decoratedService[3] ?? ContainerInterface::EXCEPTION_ON_INVALID_REFERENCE;
 
             $definition->setDecoratedService(null);
@@ -59,6 +60,7 @@ class DecoratorServicePass implements CompilerPassInterface
                 $public = $alias->isPublic();
                 $private = $alias->isPrivate();
                 $container->setAlias($renamedId, new Alias((string) $alias, false));
+                $decoratedDefinition = $container->findDefinition($alias);
             } elseif ($container->hasDefinition($inner)) {
                 $decoratedDefinition = $container->getDefinition($inner);
                 $public = $decoratedDefinition->isPublic();
@@ -72,14 +74,31 @@ class DecoratorServicePass implements CompilerPassInterface
             } elseif (ContainerInterface::NULL_ON_INVALID_REFERENCE === $invalidBehavior) {
                 $public = $definition->isPublic();
                 $private = $definition->isPrivate();
+                $decoratedDefinition = null;
             } else {
                 throw new ServiceNotFoundException($inner, $id);
             }
 
+            if ($decoratedDefinition && $decoratedDefinition->isSynthetic()) {
+                throw new InvalidArgumentException(sprintf('A synthetic service cannot be decorated: service "%s" cannot decorate "%s".', $id, $inner));
+            }
+
             if (isset($decoratingDefinitions[$inner])) {
                 $decoratingDefinition = $decoratingDefinitions[$inner];
-                $definition->setTags(array_merge($decoratingDefinition->getTags(), $definition->getTags()));
-                $decoratingDefinition->setTags([]);
+
+                $decoratingTags = $decoratingDefinition->getTags();
+                $resetTags = [];
+
+                // container.service_locator and container.service_subscriber have special logic and they must not be transferred out to decorators
+                foreach (['container.service_locator', 'container.service_subscriber'] as $containerTag) {
+                    if (isset($decoratingTags[$containerTag])) {
+                        $resetTags[$containerTag] = $decoratingTags[$containerTag];
+                        unset($decoratingTags[$containerTag]);
+                    }
+                }
+
+                $definition->setTags(array_merge($decoratingTags, $definition->getTags()));
+                $decoratingDefinition->setTags($resetTags);
                 $decoratingDefinitions[$inner] = $definition;
             }
 

@@ -4,11 +4,12 @@ use strict;
 use warnings;
 
 BEGIN {
-    our $VERSION = '0.29';
-
-    require XSLoader;
-    XSLoader::load('Math::Int64', $VERSION);
+our $VERSION = '0.54';
+require XSLoader;
+XSLoader::load('Math::Int64', $VERSION);
 }
+
+use warnings::register;
 
 use constant MAX_INT64  => string_to_int64 ( '0x7fff_ffff_ffff_ffff');
 use constant MIN_INT64  => string_to_int64 ('-0x8000_0000_0000_0000');
@@ -65,6 +66,15 @@ sub import {
     Math::Int64->export_to_level(1, $pkg, @subs);
 }
 
+sub _check_pragma_compatibility {
+    if ($^H{'Math::Int64::native_if_available'} and
+        $^H{'Math::Int64::die_on_overflow'} and
+        warnings::enabled()) {
+        warnings::warn("Math::Int64::die_on_overflow pragma is useless when Math::Int64::native_if_available is also active");
+    }
+    1;
+}
+
 use overload ( '+' => \&_add,
                '+=' => \&_add,
                '-' => \&_sub,
@@ -100,7 +110,8 @@ use overload ( '+' => \&_add,
                '=' => \&_clone,
                fallback => 1 );
 
-package Math::UInt64;
+package # hide from PAUSE since it also has its own .pm file
+    Math::UInt64;
 use overload ( '+' => \&_add,
                '+=' => \&_add,
                '-' => \&_sub,
@@ -138,7 +149,11 @@ use overload ( '+' => \&_add,
 
 1;
 
+# ABSTRACT: Manipulate 64 bits integers in Perl
+
 __END__
+
+=encoding UTF-8
 
 =head1 NAME
 
@@ -262,7 +277,7 @@ rule:
 
 That way, positive and negative integers are interleaved as 0, -1, 1,
 2, -2, .... The format is similar to that used by Google protocol
-buffers to encode signed varints but with the most significant groups
+buffers to encode signed variants but with the most significant groups
 first (protocol buffers uses the least significant groups first
 variant).
 
@@ -280,7 +295,7 @@ There must not be any extra bytes on the string after the encoded number.
 Given a string with a BER encoded number at the beginning, this
 function returns the number of bytes it uses.
 
-The rigth way to shift a BER encoded number from the beginning of some
+The right way to shift a BER encoded number from the beginning of some
 string is as follows:
 
    $i64 = BER_to_int64(substr($str, 0, BER_length($str), ''));
@@ -328,6 +343,10 @@ Encodes the given unsigned integer in BER format (see L<perlfunc/pack>).
 
 Decodes from the given string an unsigned number in BER format.
 
+=item uint64_rand
+
+Generates a 64 bit random unsigned number using ISAAC-64 algorithm.
+
 =back
 
 =head2 Die on overflow
@@ -362,7 +381,7 @@ C<die_on_overflow> pragma is global and can not be deactivated.
 
 If the lexical pragma C<Math::Int64::native_if_available> is used in
 your program and the version of perl in use has native support for
-64bit intgers, the functions imported from the module that create
+64bit integers, the functions imported from the module that create
 64bit integers (i.e. C<uint64>, C<int64>, C<string_to_int64>,
 C<native_to_int64>, etc.) will return regular perl scalars.
 
@@ -380,9 +399,10 @@ This feature is not enabled by default because the semantics for perl
 scalars and for 64 bit integers as implemented in this module are not
 identical.
 
-Perl is prone to coerze integers into floats while this module keeps
+Perl is prone to coerce integers into floats while this module keeps
 then always as 64bit integers. Specifically, the division operation
-and overflows are the most problematic cases.
+and overflows are the most problematic cases. Also, when using native
+integers, the signed/unsigned division blurs.
 
 Besides that, in most situations it is safe to use the native fallback.
 
@@ -452,22 +472,22 @@ For instance:
   #include "perl.h"
   #include "XSUB.h"
   #include "ppport.h"
-  
+
   /* #define MATH_INT64_NATIVE_IF_AVAILABLE */
   #include "math_int64.h"
-  
+
   MODULE = Foo64		PACKAGE = Foo64
   BOOT:
       PERL_MATH_INT64_LOAD_OR_CROAK;
-  
+
   int64_t
   some_int64()
   CODE:
       RETVAL = -42;
   OUTPUT:
       RETVAL
-  
-  
+
+
   --- Makefile.PL -----
 
   use ExtUtils::MakeMaker;
@@ -513,6 +533,14 @@ Returns true is the given SV contains a valid uint64_t value.
 
 Returns a random 64 bits unsigned integer.
 
+=item SV sv_seti64(SV *sv, uint64_t i64)
+
+Sets the value of the perl scalar to the given int64_t value.
+
+=item SV sv_setu64(SV *sv, uint64_t i64)
+
+Sets the value of the perl scalar to the given uint64_t value.
+
 =back
 
 If you require any other function available through the C API don't
@@ -527,7 +555,7 @@ The C API feature is experimental.
 This module requires int64 support from the C compiler.
 
 In order to report bugs you can send me and email to the address that
-appears below or use the CPAN RT bugtracking system available at
+appears below or use the CPAN RT bug tracking system available at
 L<http://rt.cpan.org>.
 
 The source for the development version of the module is hosted at
@@ -549,8 +577,10 @@ L<Math::BigInt::GMP>.
 
 =head1 COPYRIGHT AND LICENSE
 
-Copyright E<copy> 2007, 2009, 2011-2013 by Salvador FandiE<ntilde>o
+Copyright E<copy> 2007, 2009, 2011-2015 by Salvador Fandiño
 (sfandino@yahoo.com)
+
+Copyright E<copy> 2014-2015 by Dave Rolsky (autarch@urth.org)
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself, either Perl version 5.8.8 or,

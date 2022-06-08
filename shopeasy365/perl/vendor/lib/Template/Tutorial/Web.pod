@@ -143,7 +143,7 @@ this list within the template to contain a number of hash references, each
 containing a 'C<url>' and 'C<title>' member. The C<FOREACH> directive iterates
 through the list, aliasing 'C<page>' to each item (in this case, hash array
 references). The C<[% page.url %]> and C<[% page.title %]> directives then
-access the individual values in the hash ararys and insert them into the
+access the individual values in the hash arrays and insert them into the
 document.
 
 =head2 Using tpage
@@ -525,12 +525,11 @@ module.  That module might look something like this:
     package MyOrg::Apache::User;
     
     use strict;
-    use vars qw( $VERSION );
     use Apache::Constants qw( :common );
     use Template qw( :template );
     use CGI;
     
-    $VERSION = 1.59;
+    our $VERSION = 1.59;
     
     sub handler {
         my $r = shift;

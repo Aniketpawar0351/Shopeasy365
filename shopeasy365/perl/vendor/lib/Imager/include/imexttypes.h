@@ -34,7 +34,7 @@
  will result in an increment of IMAGER_API_LEVEL.
 */
 
-#define IMAGER_API_LEVEL 8
+#define IMAGER_API_LEVEL 10
 
 typedef struct {
   int version;
@@ -104,7 +104,7 @@ typedef struct {
 
   void (*f_i_clear_error)(void); /* SKIP */
   void (*f_i_push_error)(int code, char const *msg); /* SKIP */
-  void (*f_i_push_errorf)(int code, char const *fmt, ...);
+  void (*f_i_push_errorf)(int code, char const *fmt, ...) I_FORMAT_ATTR(2,3);
   void (*f_i_push_errorvf)(int code, char const *fmt, va_list); /* SKIP */
   
   void (*f_i_tags_new)(i_img_tags *tags);
@@ -165,7 +165,7 @@ typedef struct {
   i_img_dim (*f_i_img_get_width)(i_img *im);
   i_img_dim (*f_i_img_get_height)(i_img *im);
   void (*f_i_lhead)(const char *file, int line_number);
-  void (*f_i_loog)(int level, const char *msg, ...);
+  void (*f_i_loog)(int level, const char *msg, ...) I_FORMAT_ATTR(2,3);
 
   /* IMAGER_API_LEVEL 4 functions will be added here */
   i_img *(*f_i_img_alloc)(void); /* SKIP */
@@ -217,7 +217,7 @@ typedef struct {
   size_t (*f_io_slurp)(i_io_glue_t *ig, unsigned char **c);
   void (*f_io_glue_destroy)(i_io_glue_t *ig);
 
-  /* IMAGER_API_LEVEL 8 functions will be added here */
+  /* IMAGER_API_LEVEL 8 */
   i_img *(*f_im_img_8_new)(im_context_t ctx, i_img_dim xsize, i_img_dim ysize, int channels);
   i_img *(*f_im_img_16_new)(im_context_t ctx, i_img_dim xsize, i_img_dim ysize, int channels);
   i_img *(*f_im_img_double_new)(im_context_t ctx, i_img_dim xsize, i_img_dim ysize, int channels);
@@ -226,7 +226,7 @@ typedef struct {
   void (*f_im_clear_error)(im_context_t ctx);
   void (*f_im_push_error)(im_context_t ctx, int code, char const *msg);
   void (*f_im_push_errorvf)(im_context_t ctx, int code, char const *fmt, va_list);
-  void (*f_im_push_errorf)(im_context_t , int code, char const *fmt, ...);
+  void (*f_im_push_errorf)(im_context_t , int code, char const *fmt, ...) I_FORMAT_ATTR(3,4);
 
   int (*f_im_set_image_file_limits)(im_context_t ctx, i_img_dim width, i_img_dim height, size_t bytes);
   int (*f_im_get_image_file_limits)(im_context_t ctx, i_img_dim *width, i_img_dim *height, size_t *bytes);
@@ -254,6 +254,26 @@ typedef struct {
   im_slot_t (*f_im_context_slot_new)(im_slot_destroy_t);
   int (*f_im_context_slot_set)(im_context_t, im_slot_t, void *);
   void *(*f_im_context_slot_get)(im_context_t, im_slot_t);
+
+  /* IMAGER_API_LEVEL 9 */
+  int (*f_i_poly_poly_aa)(i_img *im, int count, const i_polygon_t *polys,
+			  i_poly_fill_mode_t mode, const i_color *val);
+  int (*f_i_poly_poly_aa_cfill)(i_img *im, int count, const i_polygon_t *polys,
+				i_poly_fill_mode_t mode, i_fill_t *fill);
+  int (*f_i_poly_aa_m)(i_img *im, int l, const double *x, const double *y,
+		       i_poly_fill_mode_t mode, const i_color *val);
+  int (*f_i_poly_aa_cfill_m)(i_img *im, int l, const double *x, 
+			     const double *y, i_poly_fill_mode_t mode,
+			     i_fill_t *fill);
+
+  int (*f_i_img_alpha_channel)(i_img *im, int *channel);
+  i_color_model_t (*f_i_img_color_model)(i_img *im);
+  int (*f_i_img_color_channels)(i_img *im);
+
+  /* IMAGER_API_LEVEL 10 functions will be added here */
+  int (*f_im_decode_exif)(i_img *im, const unsigned char *data, size_t length);
+
+  /* IMAGER_API_LEVEL 11 functions will be added here */
 } im_ext_funcs;
 
 #define PERL_FUNCTION_TABLE_NAME "Imager::__ext_func_table"

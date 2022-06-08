@@ -26,25 +26,23 @@ goto endofperl
 @rem ';
 #!perl
 #line 29
+    eval 'exec \xampp\perl\bin\perl.exe -S $0 ${1+"$@"}'
+        if $running_under_some_shell;
 
-# pod2text -- Convert POD data to formatted ASCII text.
-#
-# Copyright 1999, 2000, 2001, 2004, 2006, 2008, 2010, 2012, 2013
-#     Russ Allbery <rra@stanford.edu>
-#
-# This program is free software; you may redistribute it and/or modify it
-# under the same terms as Perl itself.
+# Convert POD data to formatted ASCII text.
 #
 # The driver script for Pod::Text, Pod::Text::Termcap, and Pod::Text::Color,
 # invoked by perldoc -t among other things.
+#
+# SPDX-License-Identifier: GPL-1.0-or-later OR Artistic-1.0-Perl
 
-require 5.004;
+use 5.006;
+use strict;
+use warnings;
 
 use Getopt::Long qw(GetOptions);
 use Pod::Text ();
 use Pod::Usage qw(pod2usage);
-
-use strict;
 
 # Clean up $0 for error reporting.
 $0 =~ s%.*/%%;
@@ -65,10 +63,8 @@ for (my $i = 0; $i < @ARGV; $i++) {
 my $stdin;
 @ARGV = map { $_ eq '-' && !$stdin++ ? ('--', $_) : $_ } @ARGV;
 
-# Parse our options.  Use the same names as Pod::Text for simplicity, and
-# default to sentence boundaries turned off for compatibility.
+# Parse our options.  Use the same names as Pod::Text for simplicity.
 my %options;
-$options{sentence} = 0;
 Getopt::Long::config ('bundling');
 GetOptions (\%options, 'alt|a', 'code', 'color|c', 'errors=s', 'help|h',
             'indent|i=i', 'loose|l', 'margin|left-margin|m=i', 'nourls',
@@ -106,7 +102,11 @@ do {
     $parser->parse_from_file ($input, $output);
     if ($parser->{CONTENTLESS}) {
         $status = 1;
-        warn "$0: unable to format $input\n";
+        if (defined $input) {
+            warn "$0: unable to format $input\n";
+        } else {
+            warn "$0: unable to format standard input\n";
+        }
         if (defined ($output) and $output ne '-') {
             unlink $output unless (-s $output);
         }
@@ -166,12 +166,7 @@ code left intact.
 Format the output with ANSI color escape sequences.  Using this option
 requires that Term::ANSIColor be installed on your system.
 
-=item B<-i> I<indent>, B<--indent=>I<indent>
-
-Set the number of spaces to indent regular text, and the default indentation
-for C<=over> blocks.  Defaults to 4 spaces if this option isn't given.
-
-=item B<-errors>=I<style>
+=item B<--errors>=I<style>
 
 Set the error handling style.  C<die> says to throw an exception on any
 POD formatting error.  C<stderr> says to report errors on standard error,
@@ -180,6 +175,11 @@ section in the resulting documentation summarizing the errors.  C<none>
 ignores POD errors entirely, as much as possible.
 
 The default is C<die>.
+
+=item B<-i> I<indent>, B<--indent=>I<indent>
+
+Set the number of spaces to indent regular text, and the default indentation
+for C<=over> blocks.  Defaults to 4 spaces if this option isn't given.
 
 =item B<-h>, B<--help>
 
@@ -224,10 +224,8 @@ to convert this to bold or underlined text.
 
 Sets the quote marks used to surround CE<lt>> text to I<quotes>.  If
 I<quotes> is a single character, it is used as both the left and right
-quote; if I<quotes> is two characters, the first character is used as the
-left quote and the second as the right quoted; and if I<quotes> is four
-characters, the first two are used as the left quote and the second two as
-the right quote.
+quote.  Otherwise, it is split in half, and the first half of the string
+is used as the left quote and the second is used as the right quote.
 
 I<quotes> may also be set to the special value C<none>, in which case no
 quote marks are added around CE<lt>> text.
@@ -263,10 +261,11 @@ encoding (to be backward-compatible with older versions).  This option
 says to instead force the output encoding to UTF-8.
 
 Be aware that, when using this option, the input encoding of your POD
-source must be properly declared unless it is US-ASCII or Latin-1.  POD
-input without an C<=encoding> command will be assumed to be in Latin-1,
-and if it's actually in UTF-8, the output will be double-encoded.  See
-L<perlpod(1)> for more information on the C<=encoding> command.
+source should be properly declared unless it's US-ASCII.  Pod::Simple
+will attempt to guess the encoding and may be successful if it's
+Latin-1 or UTF-8, but it will warn, which by default results in a
+B<pod2text> failure.  Use the C<=encoding> command to declare the
+encoding.  See L<perlpod(1)> for more information.
 
 =item B<-w>, B<--width=>I<width>, B<->I<width>
 
@@ -326,26 +325,26 @@ current terminal device.
 
 =back
 
+=head1 AUTHOR
+
+Russ Allbery <rra@cpan.org>.
+
+=head1 COPYRIGHT AND LICENSE
+
+Copyright 1999-2001, 2004, 2006, 2008, 2010, 2012-2019 Russ Allbery
+<rra@cpan.org>
+
+This program is free software; you may redistribute it and/or modify it
+under the same terms as Perl itself.
+
 =head1 SEE ALSO
 
 L<Pod::Text>, L<Pod::Text::Color>, L<Pod::Text::Overstrike>,
 L<Pod::Text::Termcap>, L<Pod::Simple>, L<perlpod(1)>
 
 The current version of this script is always available from its web site at
-L<http://www.eyrie.org/~eagle/software/podlators/>.  It is also part of the
+L<https://www.eyrie.org/~eagle/software/podlators/>.  It is also part of the
 Perl core distribution as of 5.6.0.
-
-=head1 AUTHOR
-
-Russ Allbery <rra@stanford.edu>.
-
-=head1 COPYRIGHT AND LICENSE
-
-Copyright 1999, 2000, 2001, 2004, 2006, 2008, 2010, 2012, 2013 Russ
-Allbery <rra@stanford.edu>.
-
-This program is free software; you may redistribute it and/or modify it
-under the same terms as Perl itself.
 
 =cut
 

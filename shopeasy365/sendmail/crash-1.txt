@@ -1,18 +1,18 @@
-date/time         : 2021-04-06, 13:47:08, 389ms
+date/time         : 2022-06-07, 17:33:15, 363ms
 computer name     : LAPTOP-D27PJ6OL
 user name         : DK0050TX
 registered owner  : DK0050TX / HP Inc.
 operating system  : Windows NT New x64 build 9200
 system language   : English
-system up time    : 4 hours 20 minutes
-program up time   : 5 seconds
+system up time    : 5 hours 50 minutes
+program up time   : 2 seconds
 processors        : 12x Intel(R) Core(TM) i7-9750H CPU @ 2.60GHz
-physical memory   : 1716/8032 MB (free/total)
-free disk space   : (C:) 81.68 GB
+physical memory   : 1162/8032 MB (free/total)
+free disk space   : (C:) 28.28 GB
 display mode      : 1536x864, 32 bit
-process id        : $1ed8
-allocated memory  : 22.15 MB
-command line      : "C:\sdp project\sendmail\sendmail.exe" -t
+process id        : $43e4
+allocated memory  : 22.12 MB
+command line      : "C:\xampp\sendmail\sendmail.exe" -t
 executable        : sendmail.exe
 exec. date/time   : 2012-04-16 23:00
 compiled with     : Delphi 2006/07
@@ -20,9 +20,9 @@ madExcept version : 3.0l
 callstack crc     : $fecf9b34, $3e229a42, $3e229a42
 exception number  : 1
 exception class   : EIdSMTPReplyError
-exception message : <https://accounts.google.com/signin/continue?sarp=1&scc=1&plt=AKgnsbs fSqnBTHg-wTDVMYKO0B0m0HZ0XqsAKkzTZOF91C7jWTZ57eLvrJQEiQ4pO9BSiAbl82uW 4NgnHSlZfxS6nZN4ckNyzGXaeC_abCT2O6Y5ZSjsiZ6TFb7E_1AlaRq603dhfcxv> Please log in via your web browser and then try again. Learn more at https://support.google.com/mail/answer/78754 d10sm15317841qko.70 - gsmtp.
+exception message : Username and Password not accepted. Learn more at https://support.google.com/mail/?p=BadCredentials j189-20020a6380c6000000b003fc32f8e030sm12496117pgd.79 - gsmtp.
 
-main thread ($3780):
+main thread ($4560):
 0045918a +003e sendmail.exe IdReplySMTP     501   +1 TIdReplySMTP.RaiseReplyError
 0043ff28 +0008 sendmail.exe IdTCPConnection 576   +0 TIdTCPConnection.RaiseExceptionForLastCmdResult
 004402f4 +003c sendmail.exe IdTCPConnection 751  +10 TIdTCPConnection.CheckResponse
@@ -31,24 +31,24 @@ main thread ($3780):
 0044020e +0056 sendmail.exe IdTCPConnection 723   +4 TIdTCPConnection.SendCmd
 0045aa16 +0192 sendmail.exe IdSMTP          341  +40 TIdSMTP.Authenticate
 004b5f81 +10cd sendmail.exe sendmail        822 +340 initialization
-7597fa27 +0017 KERNEL32.DLL                          BaseThreadInitThunk
+778cfa27 +0017 KERNEL32.DLL                          BaseThreadInitThunk
 
-thread $4a2c:
-7597fa27 +17 KERNEL32.DLL  BaseThreadInitThunk
+thread $1074:
+778cfa27 +17 KERNEL32.DLL  BaseThreadInitThunk
 
-thread $1500:
-7597fa27 +17 KERNEL32.DLL  BaseThreadInitThunk
+thread $79c:
+778cfa27 +17 KERNEL32.DLL  BaseThreadInitThunk
 
-thread $36ac:
-7597fa27 +17 KERNEL32.DLL  BaseThreadInitThunk
+thread $44e4:
+778cfa27 +17 KERNEL32.DLL  BaseThreadInitThunk
 
 stack dump:
 0019fcb4  8f 91 45 00 de fa ed 0e - 01 00 00 00 07 00 00 00  ..E.............
-0019fcc4  c8 fc 19 00 8f 91 45 00 - e8 ca c2 00 38 1e c4 00  ......E.....8...
-0019fcd4  00 00 00 00 16 02 00 00 - f8 fc 19 00 e4 fc 19 00  ................
+0019fcc4  c8 fc 19 00 8f 91 45 00 - e8 ca 57 02 38 1e 59 02  ......E...W.8.Y.
+0019fcd4  00 00 00 00 17 02 00 00 - f8 fc 19 00 e4 fc 19 00  ................
 0019fce4  38 fd 19 00 c8 4b 40 00 - f8 fc 19 00 34 a5 45 00  8....K@.....4.E.
 0019fcf4  00 00 00 00 14 fd 19 00 - 2b ff 43 00 f7 02 44 00  ........+.C...D.
-0019fd04  00 00 00 00 80 fd 19 00 - 80 fd 19 00 50 f3 bb 00  ............P...
+0019fd04  00 00 00 00 80 fd 19 00 - 80 fd 19 00 50 f3 50 02  ............P.P.
 0019fd14  2c fd 19 00 bd fe 43 00 - 00 00 00 00 94 34 46 00  ,.....C......4F.
 0019fd24  00 00 00 00 34 a5 45 00 - 58 fd 19 00 8a ff 43 00  ....4.E.X.....C.
 0019fd34  00 00 00 00 68 fd 19 00 - c8 4b 40 00 58 fd 19 00  ....h....K@.X...
@@ -58,9 +58,9 @@ stack dump:
 0019fd74  14 3f 41 00 00 00 00 00 - 34 a5 45 00 eb 00 19 00  .?A.....4.E.....
 0019fd84  00 00 00 00 d0 fd 19 00 - 1b aa 45 00 00 00 00 00  ..........E.....
 0019fd94  a0 fd 19 00 c8 4b 40 00 - d0 fd 19 00 d8 fd 19 00  .....K@.........
-0019fda4  c8 4b 40 00 d0 fd 19 00 - ff 00 00 00 48 67 bc 00  .K@.........Hg..
+0019fda4  c8 4b 40 00 d0 fd 19 00 - ff 00 00 00 e8 66 51 02  .K@..........fQ.
 0019fdb4  00 00 00 00 00 00 00 00 - eb 00 4e 01 00 00 00 00  ..........N.....
-0019fdc4  d0 69 c1 00 00 00 00 00 - 50 f3 bb 00 70 ff 19 00  .i......P...p...
+0019fdc4  d0 69 56 02 00 00 00 00 - 50 f3 50 02 70 ff 19 00  .iV.....P.P.p...
 0019fdd4  87 5f 4b 00 e4 fd 19 00 - c8 4b 40 00 70 ff 19 00  ._K......K@.p...
 0019fde4  f0 fd 19 00 c8 4b 40 00 - 70 ff 19 00 fc fd 19 00  .....K@.p.......
 

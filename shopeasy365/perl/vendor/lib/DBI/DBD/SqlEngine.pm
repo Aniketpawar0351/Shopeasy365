@@ -33,7 +33,7 @@ use strict;
 use Carp;
 use vars qw( @ISA $VERSION $drh %methods_installed);
 
-$VERSION = "0.05";
+$VERSION = "0.06";
 
 $drh = undef;    # holds driver handle(s) once initialized
 
@@ -41,6 +41,7 @@ DBI->setup_driver("DBI::DBD::SqlEngine");    # only needed once but harmless to 
 
 my %accessors = (
                   versions   => "get_driver_versions",
+                  new_meta   => "new_sql_engine_meta",
                   get_meta   => "get_sql_engine_meta",
                   set_meta   => "set_sql_engine_meta",
                   clear_meta => "clear_sql_engine_meta",
@@ -54,7 +55,7 @@ sub driver ($;$)
     # We use a hash here to have one singleton per subclass.
     # (Otherwise DBD::CSV and DBD::DBM, for example, would
     # share the same driver object which would cause problems.)
-    # An alternative would be not not cache the $drh here at all
+    # An alternative would be to not cache the $drh here at all
     # and require that subclasses do that. Subclasses should do
     # their own caching, so caching here just provides extra safety.
     $drh->{$class} and return $drh->{$class};
@@ -94,6 +95,12 @@ EOI
             eval $inject;
             $dbclass->install_method($method);
         }
+    }
+    else
+    {
+        warn "Using DBI::DBD::SqlEngine with unregistered driver $class.\n"
+          . "Reading documentation how to prevent is strongly recommended.\n";
+
     }
 
     # XXX inject DBD::XXX::Statement unless exists
@@ -143,7 +150,10 @@ sub connect ($$;$$$)
         my $two_phased_init;
         defined $dbh->{sql_init_phase} and $two_phased_init = ++$dbh->{sql_init_phase};
         my %second_phase_attrs;
-	my @func_inits;
+        my @func_inits;
+
+        # this must be done to allow DBI.pm reblessing got handle after successful connecting
+        exists $attr->{RootClass} and $second_phase_attrs{RootClass} = delete $attr->{RootClass};
 
         my ( $var, $val );
         while ( length $dbname )
@@ -162,8 +172,10 @@ sub connect ($$;$$$)
             {
                 $var = $1;
                 ( $val = $2 ) =~ s/\\(.)/$1/g;
-		exists $attr->{$var} and carp("$var is given in DSN *and* \$attr during DBI->connect()") if($^W);
-		exists $attr->{$var} or $attr->{$var} = $val;
+                exists $attr->{$var}
+                  and carp("$var is given in DSN *and* \$attr during DBI->connect()")
+                  if ($^W);
+                exists $attr->{$var} or $attr->{$var} = $val;
             }
             elsif ( $var =~ m/^(.+?)=>(.*)/s )
             {
@@ -171,55 +183,55 @@ sub connect ($$;$$$)
                 ( $val = $2 ) =~ s/\\(.)/$1/g;
                 my $ref = eval $val;
                 # $dbh->$var($ref);
-		push(@func_inits, $var, $ref);
+                push( @func_inits, $var, $ref );
             }
         }
 
-	# The attributes need to be sorted in a specific way as the
-	# assignment is through tied hashes and calls STORE on each
-	# attribute.  Some attributes require to be called prior to
-	# others
-	# e.g. f_dir *must* be done before xx_tables in DBD::File
-	# The dbh attribute sql_init_order is a hash with the order
-	# as key (low is first, 0 .. 100) and the attributes that
-	# are set to that oreder as anon-list as value:
-	# {  0 => [qw( AutoCommit PrintError RaiseError Profile ... )],
-	#   10 => [ list of attr to be dealt with immediately after first ],
-	#   50 => [ all fields that are unspecified or default sort order ],
-	#   90 => [ all fields that are needed after other initialisation ],
-	#   }
+        # The attributes need to be sorted in a specific way as the
+        # assignment is through tied hashes and calls STORE on each
+        # attribute.  Some attributes require to be called prior to
+        # others
+        # e.g. f_dir *must* be done before xx_tables in DBD::File
+        # The dbh attribute sql_init_order is a hash with the order
+        # as key (low is first, 0 .. 100) and the attributes that
+        # are set to that oreder as anon-list as value:
+        # {  0 => [qw( AutoCommit PrintError RaiseError Profile ... )],
+        #   10 => [ list of attr to be dealt with immediately after first ],
+        #   50 => [ all fields that are unspecified or default sort order ],
+        #   90 => [ all fields that are needed after other initialisation ],
+        #   }
 
-	my %order = map {
-	    my $order = $_;
-	    map { ( $_ => $order ) } @{ $dbh->{sql_init_order}{$order} };
-	} sort { $a <=> $b } keys %{ $dbh->{sql_init_order} || {} };
-	my @ordered_attr =
-	  map  { $_->[0] }
-	  sort { $a->[1] <=> $b->[1] }
-	  map  { [ $_, defined $order{$_} ? $order{$_} : 50 ] }
-	  keys %$attr;
+        my %order = map {
+            my $order = $_;
+            map { ( $_ => $order ) } @{ $dbh->{sql_init_order}{$order} };
+        } sort { $a <=> $b } keys %{ $dbh->{sql_init_order} || {} };
+        my @ordered_attr =
+          map  { $_->[0] }
+          sort { $a->[1] <=> $b->[1] }
+          map  { [ $_, defined $order{$_} ? $order{$_} : 50 ] }
+          keys %$attr;
 
-	# initialize given attributes ... lower weighted before higher weighted
-	foreach my $a (@ordered_attr)
-	{
-	    exists $attr->{$a} or next;
-	    $two_phased_init and eval {
-		$dbh->{$a} = $attr->{$a};
-		delete $attr->{$a};
-	    };
-	    $@ and $second_phase_attrs{$a} = delete $attr->{$a};
-	    $two_phased_init or $dbh->STORE($a, delete $attr->{$a});
-	}
+        # initialize given attributes ... lower weighted before higher weighted
+        foreach my $a (@ordered_attr)
+        {
+            exists $attr->{$a} or next;
+            $two_phased_init and eval {
+                $dbh->{$a} = $attr->{$a};
+                delete $attr->{$a};
+            };
+            $@ and $second_phase_attrs{$a} = delete $attr->{$a};
+            $two_phased_init or $dbh->STORE( $a, delete $attr->{$a} );
+        }
 
-	$two_phased_init and $dbh->func( 1, "init_default_attributes" );
-	%$attr = %second_phase_attrs;
+        $two_phased_init and $dbh->func( 1, "init_default_attributes" );
+        %$attr = %second_phase_attrs;
 
-	for( my $i = 0; $i < scalar(@func_inits); $i += 2 )
-	{
-	    my $func = $func_inits[$i];
-	    my $arg = $func_inits[$i+1];
-	    $dbh->$func($arg);
-	}
+        for ( my $i = 0; $i < scalar(@func_inits); $i += 2 )
+        {
+            my $func = $func_inits[$i];
+            my $arg  = $func_inits[ $i + 1 ];
+            $dbh->$func($arg);
+        }
 
         $dbh->func("init_done");
 
@@ -381,6 +393,7 @@ sub init_valid_attributes
                              sql_init_phase             => 1,    # Only during initialization
                              sql_meta                   => 1,    # meta data for tables
                              sql_meta_map               => 1,    # mapping table for identifier case
+			     sql_data_source            => 1,    # reasonable datasource class
                               };
     $dbh->{sql_readonly_attrs} = {
                                sql_engine_version         => 1,    # DBI::DBD::SqlEngine version
@@ -633,6 +646,9 @@ sub STORE ($$$)
     {
         # Driver private attributes are lower cased
 
+        ( $attrib, $value ) = $dbh->func( $attrib, $value, "validate_STORE_attr" );
+        $attrib or return;
+
         my $attr_prefix;
         $attrib =~ m/^([a-z]+_)/ and $attr_prefix = $1;
         unless ($attr_prefix)
@@ -643,9 +659,6 @@ sub STORE ($$$)
         }
         my $valid_attrs = $attr_prefix . "valid_attrs";
         my $ro_attrs    = $attr_prefix . "readonly_attrs";
-
-        ( $attrib, $value ) = $dbh->func( $attrib, $value, "validate_STORE_attr" );
-        $attrib or return;
 
         exists $dbh->{$valid_attrs}
           and ( $dbh->{$valid_attrs}{$attrib}
@@ -760,7 +773,7 @@ sub get_sql_engine_meta
       and $table = [ grep { $_ =~ $table } keys %{ $dbh->{sql_meta} } ];
 
     ref $table || ref $attr
-      or return &$gstm( $dbh, $table, $attr );
+      or return $gstm->( $dbh, $table, $attr );
 
     ref $table or $table = [$table];
     ref $attr  or $attr  = [$attr];
@@ -778,13 +791,38 @@ sub get_sql_engine_meta
         my %tattrs;
         foreach my $aname ( @{$attr} )
         {
-            $tattrs{$aname} = &$gstm( $dbh, $tname, $aname );
+            $tattrs{$aname} = $gstm->( $dbh, $tname, $aname );
         }
         $results{$tname} = \%tattrs;
     }
 
     return \%results;
 }    # get_sql_engine_meta
+
+sub new_sql_engine_meta
+{
+    my ( $dbh, $table, $values ) = @_;
+    my $respect_case = 0;
+
+    "HASH" eq ref $values
+      or croak "Invalid argument for \$values - SCALAR or HASH expected but got " . ref $values;
+
+    $table =~ s/^\"// and $respect_case = 1;    # handle quoted identifiers
+    $table =~ s/\"$//;
+
+    unless ($respect_case)
+    {
+        defined $dbh->{sql_meta_map}{$table} and $table = $dbh->{sql_meta_map}{$table};
+    }
+
+    $dbh->{sql_meta}{$table} = { %{$values} };
+    my $class;
+    defined $values->{sql_table_class} and $class = $values->{sql_table_class};
+    defined $class or ( $class = $dbh->{ImplementorClass} ) =~ s/::db$/::Table/;
+    # XXX we should never hit DBD::File::Table::get_table_meta here ...
+    my ( undef, $meta ) = $class->get_table_meta( $dbh, $table, $respect_case );
+    1;
+}    # new_sql_engine_meta
 
 sub set_single_table_meta
 {
@@ -795,7 +833,7 @@ sub set_single_table_meta
       and return $dbh->STORE( $attr, $value );
 
     ( my $class = $dbh->{ImplementorClass} ) =~ s/::db$/::Table/;
-    ( undef, $meta ) = $class->get_table_meta( $dbh, $table, 1 );
+    ( undef, $meta ) = $class->get_table_meta( $dbh, $table, 1 ); # 1 means: respect case
     $meta or croak "No such table '$table'";
     $class->set_table_meta_attr( $meta, $attr, $value );
 
@@ -816,7 +854,7 @@ sub set_sql_engine_meta
       and $table = [ grep { $_ =~ $table } keys %{ $dbh->{sql_meta} } ];
 
     ref $table || ref $attr
-      or return &$sstm( $dbh, $table, $attr, $value );
+      or return $sstm->( $dbh, $table, $attr, $value );
 
     ref $table or $table = [$table];
     ref $attr or $attr = { $attr => $value };
@@ -828,10 +866,9 @@ sub set_sql_engine_meta
 
     foreach my $tname ( @{$table} )
     {
-        my %tattrs;
         while ( my ( $aname, $aval ) = each %$attr )
         {
-            &$sstm( $dbh, $tname, $aname, $aval );
+            $sstm->( $dbh, $tname, $aname, $aval );
         }
     }
 
@@ -1264,7 +1301,7 @@ sub fetch ($)
     {
         $sth->set_err(
             $DBI::stderr,
-            "Attempt to fetch row without a preceeding execute () call or from a non-SELECT statement"
+            "Attempt to fetch row without a preceding execute () call or from a non-SELECT statement"
         );
         return;
     }
@@ -1421,6 +1458,11 @@ sub open_table ($$$$$)
                 };
     $self->{command} eq "DROP" and $flags->{dropMode} = 1;
 
+    my ( $tblnm, $table_meta ) = $class->get_table_meta( $data->{Database}, $table, 1 )
+      or croak "Cannot find appropriate meta for table '$table'";
+
+    defined $table_meta->{sql_table_class} and $class = $table_meta->{sql_table_class};
+
     # because column name mapping is initialized in constructor ...
     # and therefore specific opening operations might be done before
     # reaching DBI::DBD::SqlEngine::Table->new(), we need to intercept
@@ -1428,8 +1470,6 @@ sub open_table ($$$$$)
     my $write_op = $createMode || $lockMode || $flags->{dropMode};
     if ($write_op)
     {
-        my ( $tblnm, $table_meta ) = $class->get_table_meta( $data->{Database}, $table, 1 )
-          or croak "Cannot find appropriate file for table '$table'";
         $table_meta->{readonly}
           and croak "Table '$table' is marked readonly - "
           . $self->{command}
@@ -1614,6 +1654,14 @@ sub new
     return $className->SUPER::new($tbl);
 }    # new
 
+sub DESTROY
+{
+    my $self = shift;
+    my $meta = $self->{meta};
+    $self->{row} and undef $self->{row};
+    ()
+}
+
 1;
 
 =pod
@@ -1687,6 +1735,9 @@ by DBI::DBD::SqlEngine.
 Currently the API of DBI::DBD::SqlEngine is experimental and will
 likely change in the near future to provide the table meta data basics
 like DBD::File.
+
+DBI::DBD::SqlEngine expects that any driver in inheritance chain has
+a L<DBI prefix|DBI::DBD/The_database_handle_constructor>.
 
 =head2 Metadata
 
@@ -1826,7 +1877,7 @@ state of SQL::Statement):
   * AnyData
 
 Defaults to "CSV".  Because an SQL::Parser is instantiated only once and
-SQL::Parser doesn't allow to modify the dialect once instantiated,
+SQL::Parser doesn't allow one to modify the dialect once instantiated,
 it's strongly recommended to set this flag before any statement is
 executed (best place is connect attribute hash).
 
@@ -2019,7 +2070,7 @@ following:
 
   $dbh->func( "list_tables" );
 
-Everytime where an C<\%attr> argument can be specified, this C<\%attr>
+Every time where an C<\%attr> argument can be specified, this C<\%attr>
 object's C<sql_table_source> attribute is preferred over the C<$dbh>
 attribute or the driver default, eg.
 
@@ -2086,7 +2137,7 @@ After the method C<open_data> has been run successfully, the table's meta
 information are in a state which allowes the table's data accessor methods
 will be able to fetch/store row information. Implementation details heavily
 depends on the table implementation, whereby the most famous is surely
-L<DBD::File/DBD::File::Table|DBD::File::Table>.
+L<DBD::File::Table|DBD::File/DBD::File::Table>.
 
 =head1 SQL ENGINES
 

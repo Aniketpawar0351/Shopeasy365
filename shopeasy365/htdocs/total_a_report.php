@@ -82,10 +82,11 @@ background: linear-gradient(to right, #CFDEF3, #E0EAFC); /* W3C, IE 10+/ Edge, F
     $row2=mysqli_fetch_assoc($result2);
     while ($row2=mysqli_fetch_assoc($result2)) {
       $temp_name=$row2['e_name'];
-      $sql3="SELECT $temp_name FROM `$table_name12` WHERE a_id='$temp_id'";
+      $Ename = str_replace(' ', '_', $temp_name);
+      $sql3="SELECT $Ename FROM `$table_name12` WHERE a_id='$temp_id'";
       $result3=mysqli_query($con,$sql3);
       $row3=mysqli_fetch_assoc($result3);?>
-      <td ><?php echo $row3[$temp_name];?></td>
+      <td ><?php if($row3[$Ename]=="")echo "NA";else echo $row3[$Ename];?></td>
       <?php
     }
     ?>

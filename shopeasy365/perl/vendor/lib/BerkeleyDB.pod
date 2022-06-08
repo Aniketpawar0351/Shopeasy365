@@ -1,6 +1,6 @@
 =head1 NAME
 
-BerkeleyDB - Perl extension for Berkeley DB version 2, 3, 4 or 5
+BerkeleyDB - Perl extension for Berkeley DB version 2, 3, 4, 5 or 6
 
 =head1 SYNOPSIS
 
@@ -49,12 +49,14 @@ BerkeleyDB - Perl extension for Berkeley DB version 2, 3, 4 or 5
   $boolean = $db->byteswapped() ;
   $status = $db->truncate($count) ;
   $status = $db->compact($start, $stop, $c_data, $flags, $end);
+  $status = $db->get_blob_threshold($t1) ;
+  $status = $db->get_blob_dir($dir) ;
 
   $bool = $env->cds_enabled();
   $bool = $db->cds_enabled();
   $lock = $db->cds_lock();
   $lock->cds_unlock();
-  
+
   ($flag, $old_offset, $old_length) = $db->partial_set($offset, $length) ;
   ($flag, $old_offset, $old_length) = $db->partial_clear() ;
 
@@ -67,10 +69,15 @@ BerkeleyDB - Perl extension for Berkeley DB version 2, 3, 4 or 5
   $status = $cursor->c_pget() ;
   $status = $cursor->status() ;
   $status = $cursor->c_close() ;
+  $stream = $cursor->db_stream() ;
 
   $cursor = $db->db_join() ;
   $status = $cursor->c_get() ;
   $status = $cursor->c_close() ;
+
+  $status = $stream->size($S);
+  $status = $stream->read($data, $offset, $size);
+  $status = $stream->write($data, $offset);
 
   $status = $env->txn_checkpoint()
   $hash_ref = $env->txn_stat()
@@ -79,6 +86,8 @@ BerkeleyDB - Perl extension for Berkeley DB version 2, 3, 4 or 5
   $status = $env->set_timeout()
   $status = $env->lock_detect()
   $status = $env->lsn_reset()
+  $status = $env->get_blob_threshold($t1) ;
+  $status = $env->get_blob_dir($dir) ;
 
   $txn = $env->txn_begin() ;
   $db->Txn($txn);
@@ -120,11 +129,11 @@ B<NOTE: This document is still under construction. Expect it to be
 incomplete in places.>
 
 This Perl module provides an interface to most of the functionality
-available in Berkeley DB versions 2, 3 and 4. In general it is safe to assume
+available in Berkeley DB versions 2, 3, 5 and 6. In general it is safe to assume
 that the interface provided here to be identical to the Berkeley DB
 interface. The main changes have been to make the Berkeley DB API work
 in a Perl way. Note that if you are using Berkeley DB 2.x, the new
-features available in Berkeley DB 3.x or DB 4.x are not available via
+features available in Berkeley DB 3.x or later are not available via
 this module.
 
 The reader is expected to be familiar with the Berkeley DB
@@ -141,7 +150,7 @@ classes.
 
 The B<BerkeleyDB::Env> class provides an interface to the Berkeley DB
 function B<db_appinit> in Berkeley DB 2.x or B<db_env_create> and
-B<DBENV-E<gt>open> in Berkeley DB 3.x/4.x. Its purpose is to initialise a
+B<DBENV-E<gt>open> in Berkeley DB 3.x (or later). Its purpose is to initialise a
 number of sub-systems that can then be used in a consistent way in all
 the databases you make use of in the environment.
 
@@ -173,6 +182,8 @@ with the C<Flags> parameter, described below.
              [ -MaxObjects   => number, ]
              [ -SharedMemKey => number, ]
              [ -Verbose      => boolean, ]
+             [ -BlobThreshold=> $number, ]
+             [ -BlobDir      => directory, ]
              [ -Encrypt      => { Password => "string",
 	                          Flags    => number }, ]
 
@@ -256,7 +267,7 @@ locked objects.  Default 1000.  This is often lower than required.
 =item -SharedMemKey
 
 If present, this parameter sets the base segment ID for the shared memory
-region used by Berkeley DB. 
+region used by Berkeley DB.
 
 This option requires Berkeley DB 3.1 or better.
 
@@ -272,6 +283,22 @@ maximum number of threads but rather is used to determine memory sizing.
 
 This option requires Berkeley DB 4.4 or better. It is only supported on
 Unix/Linux.
+
+=item -BlobThreshold
+
+Sets the size threshold that will be used to decide when data is stored as
+a BLOB. This option must be set for a blobs to be used.
+
+This option requires Berkeley DB 6.0 or better.
+
+=item -BlobDir
+
+The directory where the BLOB objects are stored.
+
+If not specified blob files are stores in the environment directoy.
+
+
+This option requires Berkeley DB 6.0 or better.
 
 =item -Config
 
@@ -292,13 +319,13 @@ The code below shows an example of how it can be used.
 
 =item -ErrFile
 
-Expects a filename or filenhandle. Any errors generated internally by
+Expects a filename or filehandle. Any errors generated internally by
 Berkeley DB will be logged to this file. A useful debug setting is to
 open environments with either
 
     -ErrFile => *STDOUT
 
-or 
+or
 
     -ErrFile => *STDERR
 
@@ -321,7 +348,7 @@ If any of the files specified do not already exist, create them.
 
 B<DB_INIT_CDB>
 
-Initialise the Concurrent Access Methods  
+Initialise the Concurrent Access Methods
 
 B<DB_INIT_LOCK>
 
@@ -395,7 +422,7 @@ Only valid when Berkeley DB 3.x or better is used.
 
 Specifies what to do when a lock conflict occurs. The value should be one of
 
-B<DB_LOCK_DEFAULT> 
+B<DB_LOCK_DEFAULT>
 
 Use the default policy as specified by db_deadlock.
 
@@ -468,7 +495,7 @@ Berkeley DB environment into C<$id>. Returns 0 on success.
 
 This option requires Berkeley DB 4.2 or better.
 
-Use the C<-SharedMemKey> option when opening the environemt to set the
+Use the C<-SharedMemKey> option when opening the environmet to set the
 base segment ID.
 
 =item $env->set_isalive()
@@ -493,7 +520,7 @@ determines a thread of control exited with an unresolved transaction, the
 transaction will be aborted.
 
 Applications calling the $env->failchk method must have already called the
-$env->set_isalive method, on the same DB environement, and must have
+$env->set_isalive method, on the same DB environment, and must have
 configured their database environment using the -ThreadCount flag. The
 ThreadCount flag cannot be used on an environment that wasn't previously
 initialized with it.
@@ -502,7 +529,7 @@ This option requires Berkeley DB 4.4 or better.
 
 =item $env->stat_print
 
-Prints statistical information. 
+Prints statistical information.
 
 If the C<MsgFile> option is specified the output will be sent to the
 file. Otherwise output is sent to standard output.
@@ -527,6 +554,14 @@ file. Otherwise output is sent to standard output.
 
 This option requires Berkeley DB 4.4 or better.
 
+=item $status = $env->get_blob_threshold($t1) ;
+
+Sets the parameter $t1 to the threshold value (in bytes) that is used to
+determine when a data item is stored as a Blob.
+
+=item $status = $env->get_blob_dir($dir) ;
+
+Sets the $dir parameter to the directory where blob files are stored.
 
 =item $env->set_timeout($timeout, $flags)
 
@@ -590,7 +625,7 @@ TODO.
 =item B<BerkeleyDB::Unknown>
 
 This isn't a database format at all. It is used when you want to open an
-existing Berkeley DB database without having to know what type is it. 
+existing Berkeley DB database without having to know what type is it.
 
 =back
 
@@ -603,7 +638,7 @@ the next sections.
 
 Equivalent to calling B<db_open> with type B<DB_HASH> in Berkeley DB 2.x and
 calling B<db_create> followed by B<DB-E<gt>open> with type B<DB_HASH> in
-Berkeley DB 3.x or greater. 
+Berkeley DB 3.x or greater.
 
 Two forms of constructor are supported:
 
@@ -620,6 +655,8 @@ Two forms of constructor are supported:
                 [ -Txn           => $txn,]
                 [ -Encrypt       => { Password => "string",
 	                              Flags    => number }, ],
+                [ -BlobThreshold=> $number, ]
+                [ -BlobDir      => directory, ]
                 # BerkeleyDB::Hash specific
                 [ -Ffactor       => number,]
                 [ -Nelem         => number,]
@@ -628,7 +665,7 @@ Two forms of constructor are supported:
 
 and this
 
-    [$db =] tie %hash, 'BerkeleyDB::Hash', 
+    [$db =] tie %hash, 'BerkeleyDB::Hash',
                 [ -Filename      => "filename", ]
                 [ -Subname       => "sub-database name", ]
                 [ -Flags         => flags,]
@@ -641,6 +678,8 @@ and this
                 [ -Txn           => $txn,]
                 [ -Encrypt       => { Password => "string",
 	                              Flags    => number }, ],
+                [ -BlobThreshold=> $number, ]
+                [ -BlobDir      => directory, ]
                 # BerkeleyDB::Hash specific
                 [ -Ffactor       => number,]
                 [ -Nelem         => number,]
@@ -687,7 +726,7 @@ See the Berkeley DB documentation for details of these options.
 
 =item -Hash
 
-Allows you to provide a user defined hash function. If not specified, 
+Allows you to provide a user defined hash function. If not specified,
 a default hash function is used. Here is a template for a user-defined
 hash function
 
@@ -699,8 +738,8 @@ hash function
 	return $hash ;
     }
 
-    tie %h, "BerkeleyDB::Hash", 
-        -Filename => $filename, 
+    tie %h, "BerkeleyDB::Hash",
+        -Filename => $filename,
     	-Hash     => \&hash,
 	...
 
@@ -708,7 +747,7 @@ See L<""> for an example.
 
 =item -DupCompare
 
-Used in conjunction with the B<DB_DUPOSRT> flag. 
+Used in conjunction with the B<DB_DUPOSRT> flag.
 
     sub compare
     {
@@ -720,8 +759,8 @@ Used in conjunction with the B<DB_DUPOSRT> flag.
         return (-1 , 0 or 1) ;
     }
 
-    tie %h, "BerkeleyDB::Hash", 
-        -Filename   => $filename, 
+    tie %h, "BerkeleyDB::Hash",
+        -Filename   => $filename,
 	-Property   => DB_DUP|DB_DUPSORT,
     	-DupCompare => \&compare,
 	...
@@ -768,7 +807,7 @@ See L<COMMON DATABASE METHODS>.
 here is the output:
 
     Banana Exists
-    
+
     orange -> orange
     tomato -> red
     banana -> yellow
@@ -900,7 +939,7 @@ Notice that in the output below the duplicate values are sorted.
 
 =head2 Custom Sorting Duplicate Keys
 
-Another variation 
+Another variation
 
 TODO
 
@@ -916,7 +955,7 @@ TODO
 
 Equivalent to calling B<db_open> with type B<DB_BTREE> in Berkeley DB 2.x and
 calling B<db_create> followed by B<DB-E<gt>open> with type B<DB_BTREE> in
-Berkeley DB 3.x or greater. 
+Berkeley DB 3.x or greater.
 
 Two forms of constructor are supported:
 
@@ -934,6 +973,8 @@ Two forms of constructor are supported:
                 [ -Txn           => $txn,]
                 [ -Encrypt       => { Password => "string",
 	                              Flags    => number }, ],
+                [ -BlobThreshold=> $number, ]
+                [ -BlobDir      => directory, ]
                 # BerkeleyDB::Btree specific
                 [ -Minkey        => number,]
                 [ -Compare       => code reference,]
@@ -942,7 +983,7 @@ Two forms of constructor are supported:
 
 and this
 
-    [$db =] tie %hash, 'BerkeleyDB::Btree', 
+    [$db =] tie %hash, 'BerkeleyDB::Btree',
                 [ -Filename      => "filename", ]
                 [ -Subname       => "sub-database name", ]
                 [ -Flags         => flags,]
@@ -955,6 +996,8 @@ and this
                 [ -Txn           => $txn,]
                 [ -Encrypt       => { Password => "string",
 	                              Flags    => number }, ],
+                [ -BlobThreshold=> $number, ]
+                [ -BlobDir      => directory, ]
                 # BerkeleyDB::Btree specific
                 [ -Minkey        => number,]
                 [ -Compare       => code reference,]
@@ -1004,8 +1047,8 @@ L<"Changing the sort order"> for an example.
         return (-1 , 0 or 1) ;
     }
 
-    tie %h, "BerkeleyDB::Hash", 
-        -Filename   => $filename, 
+    tie %h, "BerkeleyDB::Hash",
+        -Filename   => $filename,
     	-Compare    => \&compare,
 	...
 
@@ -1015,13 +1058,13 @@ L<"Changing the sort order"> for an example.
     {
 	my ($key, $key2) = @_ ;
         ...
-        # return number of bytes of $key2 which are 
+        # return number of bytes of $key2 which are
         # necessary to determine that it is greater than $key1
         return $bytes ;
     }
 
-    tie %h, "BerkeleyDB::Hash", 
-        -Filename   => $filename, 
+    tie %h, "BerkeleyDB::Hash",
+        -Filename   => $filename,
     	-Prefix     => \&prefix,
 	...
 =item DupCompare
@@ -1036,8 +1079,8 @@ L<"Changing the sort order"> for an example.
         return (-1 , 0 or 1) ;
     }
 
-    tie %h, "BerkeleyDB::Hash", 
-        -Filename   => $filename, 
+    tie %h, "BerkeleyDB::Hash",
+        -Filename   => $filename,
     	-DupCompare => \&compare,
 	...
 
@@ -1059,7 +1102,7 @@ All the methods below return 0 to indicate success.
 
 =item $status = $db->db_key_range($key, $less, $equal, $greater [, $flags])
 
-Given a key, C<$key>, this method returns the proportion of keys less than 
+Given a key, C<$key>, this method returns the proportion of keys less than
 C<$key> in C<$less>, the proportion equal to C<$key> in C<$equal> and the
 proportion greater than C<$key> in C<$greater>.
 
@@ -1163,7 +1206,7 @@ You cannot change the ordering once the database has been created. Thus
 you must use the same compare function every time you access the
 database.
 
-=back 
+=back
 
 =head2 Using db_stat
 
@@ -1173,7 +1216,7 @@ TODO
 
 Equivalent to calling B<db_open> with type B<DB_RECNO> in Berkeley DB 2.x and
 calling B<db_create> followed by B<DB-E<gt>open> with type B<DB_RECNO> in
-Berkeley DB 3.x or greater. 
+Berkeley DB 3.x or greater.
 
 Two forms of constructor are supported:
 
@@ -1198,7 +1241,7 @@ Two forms of constructor are supported:
 
 and this
 
-    [$db =] tie @arry, 'BerkeleyDB::Recno', 
+    [$db =] tie @arry, 'BerkeleyDB::Recno',
                 [ -Filename      => "filename", ]
                 [ -Subname       => "sub-database name", ]
                 [ -Flags         => flags,]
@@ -1219,8 +1262,8 @@ and this
 
 =head2 A Recno Example
 
-Here is a simple example that uses RECNO (if you are using a version 
-of Perl earlier than 5.004_57 this example won't work -- see 
+Here is a simple example that uses RECNO (if you are using a version
+of Perl earlier than 5.004_57 this example won't work -- see
 L<Extra RECNO Methods> for a workaround).
 
     use strict ;
@@ -1295,7 +1338,7 @@ Two forms of constructor are supported:
 
 and this
 
-    [$db =] tie @arry, 'BerkeleyDB::Queue', 
+    [$db =] tie @arry, 'BerkeleyDB::Queue',
                 [ -Filename      => "filename", ]
                 [ -Subname       => "sub-database name", ]
                 [ -Flags         => flags,]
@@ -1334,17 +1377,19 @@ One form of constructor is supported:
                 [ -Txn           => $txn,]
                 [ -Encrypt       => { Password => "string",
 	                              Flags    => number }, ],
+                [ -BlobThreshold=> $number, ]
+                [ -BlobDir      => directory, ]
                 # BerkeleyDB::Heap specific
                 [ -HeapSize      => number, ]
                 [ -HeapSizeGb    => number, ]
 
 =head1 BerkeleyDB::Unknown
 
-This class is used to open an existing database. 
+This class is used to open an existing database.
 
 Equivalent to calling B<db_open> with type B<DB_UNKNOWN> in Berkeley DB 2.x and
 calling B<db_create> followed by B<DB-E<gt>open> with type B<DB_UNKNOWN> in
-Berkeley DB 3.x or greater. 
+Berkeley DB 3.x or greater.
 
 The constructor looks like this:
 
@@ -1363,7 +1408,7 @@ The constructor looks like this:
 	                              Flags    => number }, ],
 
 
-=head2 An example 
+=head2 An example
 
 =head1 COMMON OPTIONS
 
@@ -1535,7 +1580,7 @@ The B<$flags> parameter is optional and is currently unused.
 
 =head2 $status = $env->stat_print([$flags])
 
-Prints statistical information. 
+Prints statistical information.
 
 If the C<MsgFile> option is specified the output will be sent to the
 file. Otherwise output is sent to standard output.
@@ -1575,6 +1620,15 @@ TODO
 
 TODO
 
+=head2 $status = $db->get_blob_threshold($t1) ;
+
+Sets the parameter $t1 to the threshold value (in bytes) that is used to
+determine when a data item is stored as a Blob.
+
+=head2 $status = $db->get_blob_dir($dir) ;
+
+Sets the $dir parameter to the directory where blob files are stored.
+
 =head2 $db->type()
 
 Returns the type of the database. The possible return code are B<DB_HASH>
@@ -1605,7 +1659,7 @@ Removes a CDS lock. The destruction of the CDS lock object automatically
 calls this method.
 
 Note that if multiple CDS lock objects are created, the underlying write
-lock will not be released until all CDS lock objects are either explictly
+lock will not be released until all CDS lock objects are either explicitly
 unlocked with this method, or the CDS lock objects have been destroyed.
 
 =head2 $ref = $db->db_stat()
@@ -1629,15 +1683,15 @@ Returns the status of the last C<$db> method called.
 
 =head2 $status = $db->truncate($count)
 
-Truncates the datatabase and returns the number or records deleted
+Truncates the database and returns the number or records deleted
 in C<$count>.
 
 =head2  $status = $db->compact($start, $stop, $c_data, $flags, $end);
 
-Compacts the database C<$db>. 
+Compacts the database C<$db>.
 
 All the parameters are optional - if only want to make use of some of them,
-use C<undef> for those you don't want.  Trailing unusused parameters can be
+use C<undef> for those you don't want.  Trailing unused parameters can be
 omitted. For example, if you only want to use the C<$c_data> parameter to
 set the C<compact_fillpercent>, write you code like this
 
@@ -1655,7 +1709,7 @@ will affect the operation of the compaction.
 =item * compact_fillpercent
 
 =item * compact_timeout
-    
+
 =back
 
 The following keys, along with associated values, will be created in the
@@ -1697,10 +1751,10 @@ Secondary databased are maintained automatically.
 Associate a foreign key database C<$db> with the secondary DB
 C<$secondary>.
 
-The second parameter must be a reference to a sub or C<undef>. 
+The second parameter must be a reference to a sub or C<undef>.
 
-The C<$flags> parameter must be either C<DB_FOREIGN_CASCADE>, 
-C<DB_FOREIGN_ABORT> or C<DB_FOREIGN_NULLIFY>. 
+The C<$flags> parameter must be either C<DB_FOREIGN_CASCADE>,
+C<DB_FOREIGN_ABORT> or C<DB_FOREIGN_NULLIFY>.
 
 When the flags parameter is C<DB_FOREIGN_NULLIFY> the second parameter is a
 reference to a sub of the form
@@ -1906,7 +1960,7 @@ The B<$flags> parameter is not used at present.
 
 Stores the number of duplicates at the current cursor position in B<$cnt>.
 
-The B<$flags> parameter is not used at present. This method needs 
+The B<$flags> parameter is not used at present. This method needs
 Berkeley DB 3.1 or better.
 
 =head2  $status = $cursor->status()
@@ -1920,6 +1974,19 @@ See C<db_pget>
 =head2  $status = $cursor->c_close()
 
 Closes the cursor B<$cursor>.
+
+=head2 $stream = $cursor->db_stream($flags);
+
+Create a BerkeleyDB::DbStream object to read the blob at the current cursor location.
+See L<Blob> for details of the the BerkeleyDB::DbStream object.
+
+$flags must be one or more of the following OR'ed together
+
+DB_STREAM_READ
+DB_STREAM_WRITE
+DB_STREAM_SYNC_WRITE
+
+For full information on the flags refer to the Berkeley DB Reference Guide.
 
 =head2 Cursor Examples
 
@@ -1970,11 +2037,86 @@ and to roll back call abort:
 After committing or aborting a child transaction you need to set the active
 transaction again using C<Txn>.
 
+=head1 BerkeleyDBB::DbStream -- support for BLOB
+
+Blob support is available in Berkeley DB starting with version 6.0. Refer
+to the section "Blob Support" in the Berkeley DB Programmer Reference for
+details of how Blob supports works.
+
+A Blob is access via a BerkeleyDBB::DbStream object. This is created via a
+cursor object.
+
+    # Note - error handling not shown below.
+
+    # Set the key we want
+    my $k = "some key";
+
+    # Don't want the value retrieved by the cursor,
+    # so use partial_set to make sure no data is retrieved.
+    my $v = '';
+    $cursor->partial_set(0,0) ;
+    $cursor->c_get($k, $v, DB_SET) ;
+    $cursor->partial_clear() ;
+
+    # Now create a stream to the blob
+    my $stream = $cursor->db_stream(DB_STREAM_WRITE) ;
+
+    # get the size of the blob
+    $stream->size(my $s) ;
+
+    # Read the first 1k of data from the blob
+    my $data ;
+    $stream->read($data, 0, 1024);
+
+A BerkeleyDB::DbStream object has the following methods available:
+
+
+=head2 $status = $stream->size($SIZE);
+
+Outputs the length of the Blob in the $SIZE parameter.
+
+=head2 $status = $stream->read($data, $offset, $size);
+
+Read from the blob. $offset is the number of bytes from the start of the
+blob to read from. $size if the number of bytes to read.
+
+=head2 $status = $stream->write($data, $offset, $flags);
+
+Write $data to the blob, starting at offset $offset.
+
+Example
+
+Below is an example of how to walk through a database when you don't know
+beforehand which entries are blobs and which are not.
+
+    while (1)
+    {
+        my $k = '';
+        my $v = '';
+        $cursor->partial_set(0,0) ;
+        my $status = $cursor->c_get($k, $v, DB_NEXT) ;
+        $cursor->partial_clear();
+
+        last if $status != 0 ;
+
+        my $stream = $cursor->db_stream(DB_STREAM_WRITE);
+
+        if (defined $stream)
+        {
+            # It's a Blob
+            $stream->size(my $s) ;
+        }
+        else
+        {
+            # Not a Blob
+            $cursor->c_get($k, $v, DB_CURRENT) ;
+        }
+    }
 
 =head1 Berkeley DB Concurrent Data Store (CDS)
 
 The Berkeley DB I<Concurrent Data Store> (CDS) is a lightweight locking
-mechanism that is useful in scenarios where transactions are overkill. 
+mechanism that is useful in scenarios where transactions are overkill.
 
 =head2 What is CDS?
 
@@ -1992,7 +2134,7 @@ applications, it will be too restrictive for others. Before deciding on
 using CDS mode, you need to be sure that it is suitable for the expected
 behaviour of your application.
 
-The key features of this model are 
+The key features of this model are
 
 =over 5
 
@@ -2053,7 +2195,7 @@ L<Safely Updating Records> and L<Implicit Cursors> below.
 
 A Berkeley DB Cursor (created with C<< $db->db_cursor >>) will by hold a
 lock on the database until it is either explicitly closed or destroyed.
-This means the lock has the potential to be long lived. 
+This means the lock has the potential to be long lived.
 
 By default Berkeley DB cursors create a read lock, but it is possible to
 create a cursor that holds a write lock, thus
@@ -2062,7 +2204,7 @@ create a cursor that holds a write lock, thus
 
 
 Whilst either a read or write cursor is active, it will block any other
-processes that wants to write to the database. 
+processes that wants to write to the database.
 
 To avoid blocking problems, only keep cursors open as long as they are
 needed. The same is true when you use the C<cursor> method or the
@@ -2141,7 +2283,7 @@ Consider what happens behind the scenes when you execute the commands
 above.  Firstly, the existing value for the key "Counter" is fetched from
 the database using C<db_get>. A read lock will be used for this part of the
 update.  The value is then incremented, and the new value is written back
-to the database using C<db_put>. This time a write lock will be used. 
+to the database using C<db_put>. This time a write lock will be used.
 
 Here's the problem - there is nothing to stop two (or more) processes
 executing the read part at the same time. Remember multiple processes can
@@ -2159,7 +2301,7 @@ convenience method, called C<cds_lock>, is supplied with the BerkeleyDB
 module for this purpose. Using C<cds_lock>, the counter update code can now
 be rewritten thus:
 
-    my $lk = $dbh->cds_lock() ; 
+    my $lk = $dbh->cds_lock() ;
     $hash{Counter} ++ ;
     $lk->cds_unlock;
 
@@ -2170,7 +2312,7 @@ or this, where scoping is used to limit the lifetime of the lock object
         $hash{Counter} ++ ;
     }
 
-Similarly, C<cds_lock> can be used with the native Berkeley DB API 
+Similarly, C<cds_lock> can be used with the native Berkeley DB API
 
     my $lk = $dbh->cds_lock() ;
     $db->db_get("Counter", $value);
@@ -2207,15 +2349,15 @@ elements in a database by one.
 
     # Create a write-lock
     my $lock = $db->db_cursor(DB_WRITECURSOR);
-    # or 
+    # or
     # my $lock = $db->cds_lock();
 
-    
+
     my $cursor = $db->db_cursor();
 
     # Now loop through the database, and increment
     # each value using c_put.
-    while ($cursor->c_get($key, $value, DB_NEXT) == 0) 
+    while ($cursor->c_get($key, $value, DB_NEXT) == 0)
     {
          $cursor->c_put($key, $value+1, DB_CURRENT) == 0
              or die "$BerkeleyDB::Error\n";
@@ -2232,7 +2374,7 @@ deadlock.
 
 So the rule is -- you B<CANNOT> carry out a write operation using a
 read-only cursor (i.e. you cannot use C<c_put> or C<c_del>) whilst another
-write-cursor is already active. 
+write-cursor is already active.
 
 The workaround for this issue is to just use C<db_put> instead of C<c_put>,
 like this
@@ -2241,15 +2383,15 @@ like this
 
     # Create a write-lock
     my $lock = $db->db_cursor(DB_WRITECURSOR);
-    # or 
+    # or
     # my $lock = $db->cds_lock();
 
-    
+
     my $cursor = $db->db_cursor();
 
     # Now loop through the database, and increment
     # each value using c_put.
-    while ($cursor->c_get($key, $value, DB_NEXT) == 0) 
+    while ($cursor->c_get($key, $value, DB_NEXT) == 0)
     {
          $db->db_put($key, $value+1) == 0
              or die "$BerkeleyDB::Error\n";
@@ -2341,6 +2483,29 @@ A DBM Filter is a piece of code that is be used when you I<always>
 want to make the same transformation to all keys and/or values in a DBM
 database. All of the database classes (BerkeleyDB::Hash,
 BerkeleyDB::Btree and BerkeleyDB::Recno) support DBM Filters.
+
+An example is when you need to encode your data in UTF-8 before writing to
+the database and then decode the UTF-8 when reading from the database file.
+
+There are two ways to use a DBM Filter.
+
+=over 5
+
+=item 1.
+
+Using the low-level API defined below.
+
+=item 2.
+
+Using the L<DBM_Filter> module.
+This module hides the complexity of the API defined below and comes
+with a number of "canned" filters that cover some of the common use-cases.
+
+=back
+
+Use of the L<DBM_Filter> module is recommended.
+
+=head2 DBM Filter Low-level API
 
 There are four methods associated with DBM Filters. All work
 identically, and each is used to install (or uninstall) a single DBM
@@ -2487,15 +2652,15 @@ BerkeleyDB::Btree with BerkeleyDB::Hash.
     use BerkeleyDB ;
     use MLDBM qw(BerkeleyDB::Btree) ;
     use Data::Dumper;
- 
+
     my $filename = 'testmldbm' ;
     my %o ;
-     
+
     unlink $filename ;
     tie %o, 'MLDBM', -Filename => $filename,
                      -Flags    => DB_CREATE
                     or die "Cannot open database '$filename: $!\n";
- 
+
 See the MLDBM documentation for information on how to use the module
 and for details of its limitations.
 
@@ -2543,6 +2708,12 @@ See L<Using BerkeleyDB with MLDBM>.
 
 See the Changes file.
 
+=head1 SUPPORT
+
+General feedback/questions/bug reports should be sent to
+L<https://github.com/pmqs/BerkeleyDB/issues> (preferred) or
+L<https://rt.cpan.org/Public/Dist/Display.html?Name=BerkeleyDB>.
+
 =head1 AVAILABILITY
 
 The most recent version of B<BerkeleyDB> can always be found
@@ -2553,7 +2724,7 @@ The official web site for Berkeley DB is F<http://www.oracle.com/technology/prod
 
 =head1 COPYRIGHT
 
-Copyright (c) 1997-2004 Paul Marquess. All rights reserved. This program
+Copyright (c) 1997-2020 Paul Marquess. All rights reserved. This program
 is free software; you can redistribute it and/or modify it under the
 same terms as Perl itself.
 

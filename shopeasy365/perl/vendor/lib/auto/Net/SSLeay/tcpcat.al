@@ -3,7 +3,7 @@
 # See AutoSplit.pm.
 package Net::SSLeay;
 
-#line 1025 "blib\lib\Net\SSLeay.pm (autosplit into blib\lib\auto\Net\SSLeay\tcpcat.al)"
+#line 1146 "blib\lib\Net\SSLeay.pm (autosplit into blib\lib\auto\Net\SSLeay\tcpcat.al)"
 sub tcpcat { # address, port, message, $crt, $key --> reply / (reply,errs,cert)
     my ($dest_serv, $port, $out_message) = @_;
     my ($got, $errs, $written);
@@ -24,7 +24,7 @@ sub tcpcat { # address, port, message, $crt, $key --> reply / (reply,errs,cert)
     CORE::shutdown SSLCAT_S, 1;  # Half close --> No more output, send EOF to server
 
     warn "waiting for reply...\n" if $trace>2;
-    ($got, $errs) = tcp_read_all($ssl);
+    ($got, $errs) = tcp_read_all();
     warn "Got " . blength($got) . " bytes.\n" if $trace==3;
     warn "Got `$got' (" . blength($got) . " bytes)\n" if $trace>3;
 

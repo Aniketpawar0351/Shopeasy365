@@ -2,6 +2,7 @@
 /**
  * `LIMIT` keyword parser.
  */
+
 declare(strict_types=1);
 
 namespace PhpMyAdmin\SqlParser\Components;
@@ -13,6 +14,8 @@ use PhpMyAdmin\SqlParser\TokensList;
 
 /**
  * `LIMIT` keyword parser.
+ *
+ * @final
  */
 class Limit extends Component
 {
@@ -79,6 +82,7 @@ class Limit extends Component
                 if ($offset) {
                     $parser->error('An offset was expected.', $token);
                 }
+
                 $offset = true;
                 continue;
             }
@@ -103,10 +107,7 @@ class Limit extends Component
         }
 
         if ($offset) {
-            $parser->error(
-                'An offset was expected.',
-                $list->tokens[$list->idx - 1]
-            );
+            $parser->error('An offset was expected.', $list->tokens[$list->idx - 1]);
         }
 
         --$list->idx;

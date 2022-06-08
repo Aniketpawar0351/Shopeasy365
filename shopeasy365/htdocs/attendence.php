@@ -123,7 +123,8 @@ if(isset($_POST['submit_a'])){
     $result12=mysqli_query($con,$sql12);
     $row12=mysqli_fetch_assoc($result12);
     $a_id=$row12['a_id'];
-    $res1=mysqli_query($con,"UPDATE $table_name12 SET  `$em_name`='$a_status' WHERE a_id='$a_id'");
+    $Ename = str_replace(' ', '_', $em_name);
+    $res1=mysqli_query($con,"UPDATE $table_name12 SET  `$Ename`='$a_status' WHERE a_id='$a_id'");
     if($res1){
       echo"<script>Swal.fire({
 

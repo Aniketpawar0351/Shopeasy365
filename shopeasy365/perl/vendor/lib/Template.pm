@@ -10,7 +10,7 @@
 #   Andy Wardley   <abw@wardley.org>
 #
 # COPYRIGHT
-#   Copyright (C) 1996-2012 Andy Wardley.  All Rights Reserved.
+#   Copyright (C) 1996-2020 Andy Wardley.  All Rights Reserved.
 #
 #   This module is free software; you can redistribute it and/or
 #   modify it under the same terms as Perl itself.
@@ -32,7 +32,7 @@ use File::Basename;
 use File::Path;
 use Scalar::Util qw(blessed);
 
-our $VERSION = '2.24';
+our $VERSION = '3.009';
 our $ERROR   = '';
 our $DEBUG   = 0;
 our $BINMODE = 0 unless defined $BINMODE;
@@ -87,7 +87,7 @@ sub process {
 #------------------------------------------------------------------------
 # service()
 #
-# Returns a reference to the the internal SERVICE object which handles
+# Returns a reference to the internal SERVICE object which handles
 # all requests for this Template object
 #------------------------------------------------------------------------
 
@@ -100,7 +100,7 @@ sub service {
 #------------------------------------------------------------------------
 # context()
 #
-# Returns a reference to the the CONTEXT object withint the SERVICE
+# Returns a reference to the CONTEXT object within the SERVICE
 # object.
 #------------------------------------------------------------------------
 
@@ -189,7 +189,7 @@ sub _output {
             # strip file name and line number from error raised by die()
             ($error = $@) =~ s/ at \S+ line \d+\n?$//;
         }
-        elsif (open(FP, ">$where")) {
+        elsif (open(FP, '>', $where)) {
             # binmode option can be 1 or a specific layer, e.g. :utf8
             my $bm = $options->{ binmode  };
             if ($bm && $bm eq 1) {
@@ -477,6 +477,10 @@ configuration option.  See L<Template::Manual::Config> for full details.
 
 =head2 Template Style and Parsing Options
 
+=head3 ENCODING
+
+Specifies the character encoding.
+
 =head3 START_TAG, END_TAG
 
 Define tokens that indicate start and end of directives
@@ -718,7 +722,7 @@ remain local to it.
 
 =head2 WRAPPER
 
-The content between the C<WRAPPER> and correspondng C<END> directives is first
+The content between the C<WRAPPER> and corresponding C<END> directives is first
 evaluated, with the output generated being stored in the C<content> variable.
 The named template is then process as per C<INCLUDE>.
 
@@ -911,11 +915,11 @@ Andy Wardley E<lt>abw@wardley.orgE<gt> L<http://wardley.org/>
 
 =head1 VERSION
 
-Template Toolkit version 2.23, released January 2012.
+Template Toolkit version 3.009, released on July 13 2020.
 
 =head1 COPYRIGHT
 
-Copyright (C) 1996-2012 Andy Wardley.  All Rights Reserved.
+Copyright (C) 1996-2020 Andy Wardley.  All Rights Reserved.
 
 This module is free software; you can redistribute it and/or
 modify it under the same terms as Perl itself.

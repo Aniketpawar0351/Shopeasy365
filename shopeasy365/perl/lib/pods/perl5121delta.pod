@@ -87,11 +87,11 @@ We removed a false claim in L<perlunitut> that all text strings are Unicode stri
 
 =item *
 
-We updated the Github mirror link in L<perlrepository> to mirrors/perl, not github/perl
+We updated the GitHub mirror link in L<perlrepository> to mirrors/perl, not github/perl
 
 =item *
 
-We fixed a a minor error in L<perl5114delta.pod>.
+We fixed a minor error in L<perl5114delta.pod>.
 
 =item * 
 

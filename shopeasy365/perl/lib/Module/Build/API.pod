@@ -72,6 +72,13 @@ An array reference of files to be cleaned up when the C<clean> action
 is performed. See also the L<add_to_cleanup()|/"add_to_cleanup(@files)">
 method.
 
+=item allow_pureperl
+
+[version 0.4005]
+
+A bool indicating the module is still functional without its xs parts.
+When an XS module is build with --pureperl_only, it will otherwise fail.
+
 =item auto_configure_requires
 
 [version 0.34]
@@ -175,6 +182,15 @@ See L</auto_configure_requires> for details.
 See the documentation for L<Module::Build::Authoring/"PREREQUISITES">
 for the details of how requirements can be specified.
 
+=item test_requires
+
+[version 0.4004]
+
+Modules listed in this section must be installed before testing the distribution.
+
+See the documentation for L<Module::Build::Authoring/"PREREQUISITES">
+for the details of how requirements can be specified.
+
 =item create_packlist
 
 [version 0.28]
@@ -235,6 +251,8 @@ C<distdir> (or C<dist>) action to automatically create a Makefile.PL
 for compatibility with C<ExtUtils::MakeMaker>.  The parameter's value
 should be one of the styles named in the L<Module::Build::Compat>
 documentation.
+
+Use of this parameter is L<discouraged|Module::Build::Compat/"WARNING">.
 
 =item create_readme
 
@@ -340,17 +358,16 @@ L</module_name>.
 [version 0.07]
 
 A boolean flag indicating whether the F<Build.PL> file must be
-executed, or whether this module can be built, tested and installed
+executed to determine prerequisites, or whether they can be determined
 solely from consulting its metadata file.  The main reason to set this
-to a true value is that your module performs some dynamic
-configuration as part of its build/install process.  If the flag is
-omitted, the F<META.yml> spec says that installation tools should
-treat it as 1 (true), because this is a safer way to behave.
+to a true value is that your module adds or removes prerequisites
+dynamically in F<Build.PL>.  If the flag is omitted, it will be treated
+as 1 (true), because this is a safer way to behave.
 
 Currently C<Module::Build> doesn't actually do anything with this flag
 - it's up to higher-level tools like C<CPAN.pm> to do something useful
-with it.  It can potentially bring lots of security, packaging, and
-convenience improvements.
+with it.  It can also be very helpful for static analysis.  See
+L<CPAN::Meta::Spec/dynamic_config> for details on the metadata field.
 
 =item extra_compiler_flags
 
@@ -378,6 +395,14 @@ To link your XS code against glib you might write something like:
      extra_compiler_flags => scalar `glib-config --cflags`,
      extra_linker_flags   => scalar `glib-config --libs`,
     );
+
+=item extra_manify_args
+
+[version 0.4006]
+
+Any extra arguments to pass to C<< Pod::Man->new() >> when building
+man pages.  One common choice might be C<< utf8 => 1 >> to get Unicode
+support.
 
 =item get_options
 
@@ -1066,7 +1091,7 @@ This method is the preferred interface for retrieving the arguments passed via
 command line options to F<Build.PL> or F<Build>, minus the Module-Build
 specific options.
 
-When called in in a scalar context with no arguments, this method returns a
+When called in a scalar context with no arguments, this method returns a
 reference to the hash storing all of the arguments; in an array context, it
 returns the hash itself.  When passed a single argument, it returns the value
 stored in the args hash for that option key.  When called with two arguments,
@@ -1243,7 +1268,7 @@ that were passed to the C<new()> method.
 
 [version 0.20]
 
-[Deprecated] Please see L<Module::Build::ModuleInfo> instead.
+[Deprecated] Please see L<Module::Metadata> instead.
 
 Returns true if the given file appears to contain POD documentation.
 Currently this checks whether the file has a line beginning with
@@ -1753,7 +1778,7 @@ Examples:
 
 Returns a reference to a hash describing all prerequisites.  The keys of the
 hash will be the various prerequisite types ('requires', 'build_requires',
-'configure_requires', 'recommends', or 'conflicts') and the values will be
+'test_requires', 'configure_requires', 'recommends', or 'conflicts') and the values will be
 references to hashes of module names and version numbers.  Only prerequisites
 types that are defined will be included.  The C<prereq_data> action is just a
 thin wrapper around the C<prereq_data()> method and dumps the hash as a string
@@ -1916,6 +1941,8 @@ accessor methods for the following properties:
 
 =item allow_mb_mismatch()
 
+=item allow_pureperl()
+
 =item auto_configure_requires()
 
 =item autosplit()
@@ -1948,6 +1975,8 @@ accessor methods for the following properties:
 
 =item conflicts()
 
+=item cover()
+
 =item cpan_client()
 
 =item create_license()
@@ -1965,6 +1994,8 @@ accessor methods for the following properties:
 =item destdir()
 
 =item dynamic_config()
+
+=item extra_manify_args()
 
 =item get_options()
 
@@ -2016,6 +2047,8 @@ accessor methods for the following properties:
 
 =item program_name()
 
+=item pureperl_only()
+
 =item quiet()
 
 =item recommends()
@@ -2034,6 +2067,8 @@ accessor methods for the following properties:
 
 =item test_file_exts()
 
+=item test_requires()
+
 =item use_rcfile()
 
 =item use_tap_harness()
@@ -2049,7 +2084,7 @@ accessor methods for the following properties:
 If you would like to add other useful metadata, C<Module::Build>
 supports this with the C<meta_add> and C<meta_merge> arguments to
 L</new()>. The authoritative list of supported metadata can be found at
-L<CPAN::META::Spec> but for convenience - here are a few of the more useful ones:
+L<CPAN::Meta::Spec> but for convenience - here are a few of the more useful ones:
 
 =over 4
 
@@ -2087,6 +2122,6 @@ perl(1), L<Module::Build>(3), L<Module::Build::Authoring>(3),
 L<Module::Build::Cookbook>(3), L<ExtUtils::MakeMaker>(3)
 
 F<META.yml> Specification:
-L<CPAN::META::Spec>
+L<CPAN::Meta::Spec>
 
 =cut

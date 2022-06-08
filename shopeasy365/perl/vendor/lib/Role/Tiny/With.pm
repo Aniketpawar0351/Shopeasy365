@@ -1,15 +1,19 @@
 package Role::Tiny::With;
 
 use strict;
-use warnings FATAL => 'all';
+use warnings;
+
+our $VERSION = '2.002004';
+$VERSION =~ tr/_//d;
+
 use Role::Tiny ();
 
 use Exporter 'import';
 our @EXPORT = qw( with );
 
 sub with {
-    my $target = caller;
-    Role::Tiny->apply_roles_to_package($target, @_)
+  my $target = caller;
+  Role::Tiny->apply_roles_to_package($target, @_)
 }
 
 1;

@@ -1,14 +1,10 @@
-package Package::Stash::XS;
-BEGIN {
-  $Package::Stash::XS::AUTHORITY = 'cpan:DOY';
-}
-{
-  $Package::Stash::XS::VERSION = '0.26';
-}
+package Package::Stash::XS; # git description: 4627d81
 use strict;
 use warnings;
 use 5.008001;
 # ABSTRACT: faster and more correct implementation of the Package::Stash API
+
+our $VERSION = '0.29';
 
 use XSLoader;
 XSLoader::load(
@@ -28,13 +24,15 @@ __END__
 
 =pod
 
+=encoding UTF-8
+
 =head1 NAME
 
 Package::Stash::XS - faster and more correct implementation of the Package::Stash API
 
 =head1 VERSION
 
-version 0.26
+version 0.29
 
 =head1 SYNOPSIS
 
@@ -46,23 +44,9 @@ This is a backend for L<Package::Stash>, which provides the functionality in a
 way that's less buggy and much faster. It will be used by default if it's
 installed, and should be preferred in all environments with a compiler.
 
-=head1 BUGS
-
-No known bugs (but see the BUGS section in L<Package::Stash>).
-
-Please report any bugs through RT: email
-C<bug-package-stash-xs at rt.cpan.org>, or browse to
-L<http://rt.cpan.org/NoAuth/ReportBug.html?Queue=Package-Stash-XS>.
-
 =head1 SEE ALSO
 
-=over 4
-
-=item * L<Class::MOP::Package>
-
-This module is a factoring out of code that used to live here
-
-=back
+L<Package::Stash>
 
 =head1 SUPPORT
 
@@ -74,30 +58,23 @@ You can also look for information at:
 
 =over 4
 
-=item * AnnoCPAN: Annotated CPAN documentation
+=item * MetaCPAN
 
-L<http://annocpan.org/dist/Package-Stash-XS>
+L<https://metacpan.org/release/Package-Stash-XS>
 
-=item * CPAN Ratings
+=item * Github
 
-L<http://cpanratings.perl.org/d/Package-Stash-XS>
+L<https://github.com/moose/Package-Stash-XS>
 
 =item * RT: CPAN's request tracker
 
 L<http://rt.cpan.org/NoAuth/Bugs.html?Dist=Package-Stash-XS>
 
-=item * Search CPAN
+=item * CPAN Ratings
 
-L<http://search.cpan.org/dist/Package-Stash-XS>
+L<http://cpanratings.perl.org/d/Package-Stash-XS>
 
 =back
-
-=head1 AUTHOR
-
-Jesse Luehrs <doy at tozt dot net>
-
-Based on code from L<Class::MOP::Package>, by Stevan Little and the Moose
-Cabal.
 
 =for Pod::Coverage add_symbol
 get_all_symbols
@@ -111,13 +88,48 @@ new
 remove_glob
 remove_symbol
 
+=head1 BUGS
+
+No known bugs (but see the BUGS section in L<Package::Stash>).
+
+Bugs may be submitted through L<the RT bug tracker|https://rt.cpan.org/Public/Dist/Display.html?Name=Package-Stash-XS>
+(or L<bug-Package-Stash-XS@rt.cpan.org|mailto:bug-Package-Stash-XS@rt.cpan.org>).
+
 =head1 AUTHOR
 
-Jesse Luehrs <doy at tozt dot net>
+Jesse Luehrs <doy@tozt.net>
+
+=head1 CONTRIBUTORS
+
+=for stopwords Florian Ragwitz Karen Etheridge Dave Rolsky Justin Hunter Tim Bunce
+
+=over 4
+
+=item *
+
+Florian Ragwitz <rafl@debian.org>
+
+=item *
+
+Karen Etheridge <ether@cpan.org>
+
+=item *
+
+Dave Rolsky <autarch@urth.org>
+
+=item *
+
+Justin Hunter <justin.d.hunter@gmail.com>
+
+=item *
+
+Tim Bunce <Tim.Bunce@pobox.com>
+
+=back
 
 =head1 COPYRIGHT AND LICENSE
 
-This software is copyright (c) 2013 by Jesse Luehrs.
+This software is copyright (c) 2018 by Jesse Luehrs.
 
 This is free software; you can redistribute it and/or modify it under
 the same terms as the Perl 5 programming language system itself.

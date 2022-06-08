@@ -4,6 +4,8 @@ use strict;
 use warnings;
 # PODNAME: package-stash-conflicts
 
+# this script was generated with Dist::Zilla::Plugin::Conflicts 0.19
+
 use Getopt::Long;
 use Package::Stash::Conflicts;
 

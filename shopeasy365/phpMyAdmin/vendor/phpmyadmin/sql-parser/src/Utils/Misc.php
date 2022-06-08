@@ -2,6 +2,7 @@
 /**
  * Miscellaneous utilities.
  */
+
 declare(strict_types=1);
 
 namespace PhpMyAdmin\SqlParser\Utils;
@@ -24,10 +25,7 @@ class Misc
      */
     public static function getAliases($statement, $database)
     {
-        if (! ($statement instanceof SelectStatement)
-            || empty($statement->expr)
-            || empty($statement->from)
-        ) {
+        if (! ($statement instanceof SelectStatement) || empty($statement->expr) || empty($statement->from)) {
             return [];
         }
 
@@ -76,12 +74,12 @@ class Misc
             if (! isset($tables[$thisDb])) {
                 $tables[$thisDb] = [];
             }
+
             $tables[$thisDb][$expr->alias] = $expr->table;
         }
 
         foreach ($statement->expr as $expr) {
-            if (! isset($expr->column, $expr->alias) || ($expr->column === '') || ($expr->alias === '')
-            ) {
+            if (! isset($expr->column, $expr->alias) || ($expr->column === '') || ($expr->alias === '')) {
                 continue;
             }
 
@@ -89,8 +87,7 @@ class Misc
                 $expr->database : $database;
 
             if (isset($expr->table) && ($expr->table !== '')) {
-                $thisTable = isset($tables[$thisDb][$expr->table]) ?
-                    $tables[$thisDb][$expr->table] : $expr->table;
+                $thisTable = $tables[$thisDb][$expr->table] ?? $expr->table;
                 $retval[$thisDb]['tables'][$thisTable]['columns'][$expr->column] = $expr->alias;
             } else {
                 foreach ($retval[$thisDb]['tables'] as &$table) {

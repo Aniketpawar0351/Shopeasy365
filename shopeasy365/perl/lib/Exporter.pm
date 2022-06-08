@@ -9,7 +9,7 @@ require 5.006;
 our $Debug = 0;
 our $ExportLevel = 0;
 our $Verbose ||= 0;
-our $VERSION = '5.67';
+our $VERSION = '5.74';
 our (%Cache);
 
 sub as_heavy {
@@ -106,14 +106,14 @@ In module F<YourModule.pm>:
 
   package YourModule;
   require Exporter;
-  @ISA = qw(Exporter);
-  @EXPORT_OK = qw(munge frobnicate);  # symbols to export on request
+  our @ISA = qw(Exporter);
+  our @EXPORT_OK = qw(munge frobnicate);  # symbols to export on request
 
 or
 
   package YourModule;
   use Exporter 'import'; # gives you Exporter's import() method directly
-  @EXPORT_OK = qw(munge frobnicate);  # symbols to export on request
+  our @EXPORT_OK = qw(munge frobnicate);  # symbols to export on request
 
 In other files which wish to use C<YourModule>:
 
@@ -146,8 +146,8 @@ symbols can represent functions, scalars, arrays, hashes, or typeglobs.
 The symbols must be given by full name with the exception that the
 ampersand in front of a function is optional, e.g.
 
-    @EXPORT    = qw(afunc $scalar @array);   # afunc is a function
-    @EXPORT_OK = qw(&bfunc %hash *typeglob); # explicit prefix on &bfunc
+    our @EXPORT    = qw(afunc $scalar @array);   # afunc is a function
+    our @EXPORT_OK = qw(&bfunc %hash *typeglob); # explicit prefix on &bfunc
 
 If you are only exporting function names it is recommended to omit the
 ampersand, as the implementation is faster this way.
@@ -223,7 +223,7 @@ right. Specifications are in the form:
 
     [!]name         This name only
     [!]:DEFAULT     All names in @EXPORT
-    [!]:tag         All names in $EXPORT_TAGS{tag} anonymous list
+    [!]:tag         All names in $EXPORT_TAGS{tag} anonymous array
     [!]/pattern/    All names in @EXPORT and @EXPORT_OK which match
 
 A leading ! indicates that matching names should be deleted from the
@@ -234,9 +234,9 @@ include :DEFAULT explicitly.
 
 e.g., F<Module.pm> defines:
 
-    @EXPORT      = qw(A1 A2 A3 A4 A5);
-    @EXPORT_OK   = qw(B1 B2 B3 B4 B5);
-    %EXPORT_TAGS = (T1 => [qw(A1 A2 B1 B2)], T2 => [qw(A1 A2 B3 B4)]);
+    our @EXPORT      = qw(A1 A2 A3 A4 A5);
+    our @EXPORT_OK   = qw(B1 B2 B3 B4 B5);
+    our %EXPORT_TAGS = (T1 => [qw(A1 A2 B1 B2)], T2 => [qw(A1 A2 B3 B4)]);
 
 Note that you cannot use tags in @EXPORT or @EXPORT_OK.
 
@@ -279,8 +279,8 @@ import function:
 
     package A;
 
-    @ISA = qw(Exporter);
-    @EXPORT_OK = qw ($b);
+    our @ISA = qw(Exporter);
+    our @EXPORT_OK = qw($b);
 
     sub import
     {
@@ -293,8 +293,8 @@ inheritance, as it stands Exporter::import() will never get called.
 Instead, say the following:
 
     package A;
-    @ISA = qw(Exporter);
-    @EXPORT_OK = qw ($b);
+    our @ISA = qw(Exporter);
+    our @EXPORT_OK = qw($b);
 
     sub import
     {
@@ -312,10 +312,10 @@ Note: Be careful not to modify C<@_> at all before you call export_to_level
 
 By including Exporter in your C<@ISA> you inherit an Exporter's import() method
 but you also inherit several other helper methods which you probably don't
-want.  To avoid this you can do
+want.  To avoid this you can do:
 
   package YourModule;
-  use Exporter qw( import );
+  use Exporter qw(import);
 
 which will export Exporter's own import() method into YourModule.
 Everything will work as before but you won't need to include Exporter in
@@ -374,7 +374,7 @@ Since the symbols listed within C<%EXPORT_TAGS> must also appear in either
 C<@EXPORT> or C<@EXPORT_OK>, two utility functions are provided which allow
 you to easily add tagged sets of symbols to C<@EXPORT> or C<@EXPORT_OK>:
 
-  %EXPORT_TAGS = (foo => [qw(aa bb cc)], bar => [qw(aa cc dd)]);
+  our %EXPORT_TAGS = (foo => [qw(aa bb cc)], bar => [qw(aa cc dd)]);
 
   Exporter::export_tags('foo');     # add aa, bb and cc to @EXPORT
   Exporter::export_ok_tags('bar');  # add aa, cc and dd to @EXPORT_OK
@@ -391,7 +391,7 @@ useful to create the utility ":all" to simplify "use" statements.
 
 The simplest way to do this is:
 
-  %EXPORT_TAGS = (foo => [qw(aa bb cc)], bar => [qw(aa cc dd)]);
+ our  %EXPORT_TAGS = (foo => [qw(aa bb cc)], bar => [qw(aa cc dd)]);
 
   # add all the other ":class" tags to the ":all" class,
   # deleting duplicates
@@ -460,7 +460,7 @@ variables C<@EXPORT_OK>, C<@EXPORT>, C<@ISA>, etc.
   our @ISA = qw(Exporter);
   our @EXPORT_OK = qw(munge frobnicate);
 
-If backward compatibility for Perls under 5.6 is important,
+If backward compatibility for Perls B<under> 5.6 is important,
 one must write instead a C<use vars> statement.
 
   use vars qw(@ISA @EXPORT_OK);
@@ -471,7 +471,7 @@ one must write instead a C<use vars> statement.
 
 There are some caveats with the use of runtime statements
 like C<require Exporter> and the assignment to package
-variables, which can very subtle for the unaware programmer.
+variables, which can be very subtle for the unaware programmer.
 This may happen for instance with mutually recursive
 modules, which are affected by the time the relevant
 constructions are executed.
@@ -500,9 +500,9 @@ or just plain wrong.
 With respect to loading C<Exporter> and inheriting, there
 are alternatives with the use of modules like C<base> and C<parent>.
 
-  use base qw( Exporter );
+  use base qw(Exporter);
   # or
-  use parent qw( Exporter );
+  use parent qw(Exporter);
 
 Any of these statements are nice replacements for
 C<BEGIN { require Exporter; @ISA = qw(Exporter); }>
@@ -553,11 +553,11 @@ There's one more item to add to this list.  Do B<not>
 export variable names.  Just because C<Exporter> lets you
 do that, it does not mean you should.
 
-  @EXPORT_OK = qw( $svar @avar %hvar ); # DON'T!
+  @EXPORT_OK = qw($svar @avar %hvar); # DON'T!
 
 Exporting variables is not a good idea.  They can
 change under the hood, provoking horrible
-effects at-a-distance, that are too hard to track
+effects at-a-distance that are too hard to track
 and to fix.  Trust me: they are not worth it.
 
 To provide the capability to set/get class-wide
@@ -569,7 +569,7 @@ as subroutines or class methods instead.
 C<Exporter> is definitely not the only module with
 symbol exporter capabilities.  At CPAN, you may find
 a bunch of them.  Some are lighter.  Some
-provide improved APIs and features.  Peek the one
+provide improved APIs and features.  Pick the one
 that fits your needs.  The following is
 a sample list of such modules.
 

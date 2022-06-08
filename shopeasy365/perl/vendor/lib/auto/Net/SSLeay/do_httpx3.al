@@ -3,15 +3,15 @@
 # See AutoSplit.pm.
 package Net::SSLeay;
 
-#line 1246 "blib\lib\Net\SSLeay.pm (autosplit into blib\lib\auto\Net\SSLeay\do_httpx3.al)"
+#line 1367 "blib\lib\Net\SSLeay.pm (autosplit into blib\lib\auto\Net\SSLeay\do_httpx3.al)"
 sub do_httpx3 {
     my ($method, $usessl, $site, $port, $path, $headers,
 	$content, $mime_type, $crt_path, $key_path) = @_;
     my ($response, $page, $h,$v);
 
-    if ($content) {
+    my $len = blength($content);
+    if ($len) {
 	$mime_type = "application/x-www-form-urlencoded" unless $mime_type;
-	my $len = blength($content);
 	$content = "Content-Type: $mime_type$CRLF"
 	    . "Content-Length: $len$CRLF$CRLF$content";
     } else {

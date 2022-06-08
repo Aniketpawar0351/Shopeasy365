@@ -20,6 +20,7 @@ C:\strawberry\perl\vendor\lib\Date\Language\Hungarian.pm
 C:\strawberry\perl\vendor\lib\Date\Language\Icelandic.pm
 C:\strawberry\perl\vendor\lib\Date\Language\Italian.pm
 C:\strawberry\perl\vendor\lib\Date\Language\Norwegian.pm
+C:\strawberry\perl\vendor\lib\Date\Language\Occitan.pm
 C:\strawberry\perl\vendor\lib\Date\Language\Oromo.pm
 C:\strawberry\perl\vendor\lib\Date\Language\Romanian.pm
 C:\strawberry\perl\vendor\lib\Date\Language\Russian.pm
@@ -34,4 +35,5 @@ C:\strawberry\perl\vendor\lib\Date\Language\TigrinyaEritrean.pm
 C:\strawberry\perl\vendor\lib\Date\Language\TigrinyaEthiopian.pm
 C:\strawberry\perl\vendor\lib\Date\Language\Turkish.pm
 C:\strawberry\perl\vendor\lib\Date\Parse.pm
+C:\strawberry\perl\vendor\lib\TimeDate.pm
 C:\strawberry\perl\vendor\lib\Time\Zone.pm

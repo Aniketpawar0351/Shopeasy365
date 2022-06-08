@@ -1,10 +1,5 @@
 package Moose::Meta::Method::Accessor::Native::Reader;
-BEGIN {
-  $Moose::Meta::Method::Accessor::Native::Reader::AUTHORITY = 'cpan:STEVAN';
-}
-{
-  $Moose::Meta::Method::Accessor::Native::Reader::VERSION = '2.0604';
-}
+our $VERSION = '2.2014';
 
 use strict;
 use warnings;

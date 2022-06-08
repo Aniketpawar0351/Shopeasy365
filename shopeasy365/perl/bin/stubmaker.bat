@@ -1,32 +1,19 @@
 @rem = '--*-Perl-*--
-@echo off
-if "%OS%" == "Windows_NT" goto WinNT
-IF EXIST "%~dp0perl.exe" (
-"%~dp0perl.exe" -x -S "%0" %1 %2 %3 %4 %5 %6 %7 %8 %9
-) ELSE IF EXIST "%~dp0..\..\bin\perl.exe" (
-"%~dp0..\..\bin\perl.exe" -x -S "%0" %1 %2 %3 %4 %5 %6 %7 %8 %9
-) ELSE (
-perl -x -S "%0" %1 %2 %3 %4 %5 %6 %7 %8 %9
-)
-
-goto endofperl
+@set "ErrorLevel="
+@if "%OS%" == "Windows_NT" @goto WinNT
+@perl -x -S "%0" %1 %2 %3 %4 %5 %6 %7 %8 %9
+@set ErrorLevel=%ErrorLevel%
+@goto endofperl
 :WinNT
-IF EXIST "%~dp0perl.exe" (
-"%~dp0perl.exe" -x -S %0 %*
-) ELSE IF EXIST "%~dp0..\..\bin\perl.exe" (
-"%~dp0..\..\bin\perl.exe" -x -S %0 %*
-) ELSE (
-perl -x -S %0 %*
-)
-
-if NOT "%COMSPEC%" == "%SystemRoot%\system32\cmd.exe" goto endofperl
-if %errorlevel% == 9009 echo You do not have Perl in your PATH.
-if errorlevel 1 goto script_failed_so_exit_with_non_zero_val 2>nul
-goto endofperl
+@perl -x -S %0 %*
+@set ErrorLevel=%ErrorLevel%
+@if NOT "%COMSPEC%" == "%SystemRoot%\system32\cmd.exe" @goto endofperl
+@if %ErrorLevel% == 9009 @echo You do not have Perl in your PATH.
+@goto endofperl
 @rem ';
-#!/usr/bin/env perl 
-#line 29
-#!d:\perl\bin\perl.exe 
+#!/usr/bin/env perl
+#line 30
+#!d:\perl\bin\perl.exe
 #
 # Filename: stubmaker.pl
 # Authors: Byrne Reese <byrne at majordojo dot com>
@@ -37,6 +24,8 @@ goto endofperl
 # Usage:
 #    stubmaker.pl -[vd] <WSDL URL>
 ###################################################
+
+our $VERSION = '1.27'; # VERSION
 
 use SOAP::Lite;
 use Getopt::Long;
@@ -61,8 +50,8 @@ my %services = %{SOAP::Schema->schema_url($WSDL_URL)
                              ->parse()
                              ->load
                              ->services};
-Carp::croak "More than one service in service description. Service and port names have to be specified\n" 
-    if keys %services > 1; 
+Carp::croak "More than one service in service description. Service and port names have to be specified\n"
+    if keys %services > 1;
 
 sub VERSION_MESSAGE {
     print "$0 $SOAP::Lite::VERSION (C) 2005 Byrne Reese.\n";
@@ -116,7 +105,7 @@ Outputs the current version of stubmaker.pl.
 =head2 STUB SUBROUTINES
 
 The "class" or "package" created by stubmaker.pl is actually a sub-class of
-the core SOAP::Lite object. As a result, all methods one can call upon 
+the core SOAP::Lite object. As a result, all methods one can call upon
 L<SOAP::Lite> one can also call upon generated stubs.
 
 For example, suppose you wanted to obtain readable output from the generated
@@ -145,7 +134,7 @@ SOAP::Lite will return the return value of the method.
 
 > perl stubmaker.pl http://www.xmethods.net/sd/StockQuoteService.wsdl
 Or:
-> perl "-MStockQuoteService qw(:all)" -le "print getQuote('MSFT')" 
+> perl "-MStockQuoteService qw(:all)" -le "print getQuote('MSFT')"
 
 =head2 Working with stub classes
 
@@ -167,6 +156,6 @@ Copyright (C) 2000-2005 Paul Kulchenko. All rights reserved.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.
-
 __END__
 :endofperl
+@set "ErrorLevel=" & @goto _undefined_label_ 2>NUL || @"%COMSPEC%" /d/c @exit %ErrorLevel%

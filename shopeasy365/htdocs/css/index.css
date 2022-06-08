@@ -7,7 +7,9 @@ body {
   font-family: sans-serif;
   background: linear-gradient(#141e30, #243b55);
 }
-
+.swal-wide{
+  width:850px !important;
+}
 .login-box {
   position: absolute;
   top: 50%;

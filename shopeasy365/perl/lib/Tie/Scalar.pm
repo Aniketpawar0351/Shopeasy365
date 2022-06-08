@@ -1,6 +1,6 @@
 package Tie::Scalar;
 
-our $VERSION = '1.02';
+our $VERSION = '1.05';
 
 =head1 NAME
 
@@ -22,7 +22,8 @@ Tie::Scalar, Tie::StdScalar - base class definitions for tied scalars
 
     @ISA = qw(Tie::StdScalar);
 
-    # All methods provided by default, so define only what needs be overridden
+    # All methods provided by default, so define
+    # only what needs be overridden
     sub FETCH { ... }
 
 
@@ -81,7 +82,7 @@ C<< Tie::Scalar::STORE >> results in a (trappable) croak. And if you inherit
 from C<< Tie::Scalar >>, you I<must> provide either a C<< new >> or a
 C<< TIESCALAR >> method. 
 
-If you are looking for a class that does everything for you you don't
+If you are looking for a class that does everything for you that you don't
 define yourself, use the C<< Tie::StdScalar >> class, not the
 C<< Tie::Scalar >> one.
 
@@ -144,7 +145,7 @@ package Tie::StdScalar;
 
 sub TIESCALAR {
     my $class = shift;
-    my $instance = shift || undef;
+    my $instance = @_ ? shift : undef;
     return bless \$instance => $class;
 }
 

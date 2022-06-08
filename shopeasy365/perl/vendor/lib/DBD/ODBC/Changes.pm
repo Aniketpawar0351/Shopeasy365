@@ -1,38 +1,445 @@
-=encoding utf8
+# satisfy kwalitee test
+use strict;
 
-=head1 NAME
+=encoding utf8
 
 DBD::ODBC::Changes - Log of significant changes to the DBD::ODBC
 
-As of $LastChangedDate: 2013-01-25 09:44:03 +0000 (Fri, 25 Jan 2013) $
+1.61 2020-01-30
 
-$Revision: 10667 $
+  [BUG FIXES]
 
-=head2 Changes in DBD::ODBC 1.43 March 6 2013
+  Fix 12blob.t test by pali
+  Fix searching for ODBC libraries in system by pali (#15)
+
+  [ENHANCEMENTS]
+
+  use PERL_NO_GET_CONTEXT for more performance by markusbeth (#13)
+
+  [MISCELLANEOUS]
+
+  Fix travis builds for older Perls by pali
+
+1.60 2018-10-31
+
+  [BUG FIXES]
+
+  Merged pull request 11 from audun which fixes some issues with the AutoCommit flag
+  on commit and rollback.
+
+  [MISCELLANEOUS]
+
+  Merged pull request 10 from vadz which fixed typo (affecting license) in README.md.
+
+1.59 2018-08-10
+
+  [BUG FIXES]
+
+  git issue 8. Setting odbc_utf8_on didn't work properly. Thanks to David Wheeler for
+  reporting and helping to debug.
+
+1.58 2018-03-01
+
+  [MISCELLANEOUS]
+
+  Various changes to the test suite to get better results with Postgres
+
+1.57 2018-03-01
+
+  [MISCELLANEOUS]
+
+  Merged pull request 6 from genio which allows Makefile.PL argument -u
+  to be set via the environment variable DBD_ODBC_UNICODE
+
+  This version was removed from CPAN because it was uploaded with a nasty
+  bug in the diagnostics code.
+
+1.56 2016-10-06
+
+  Full release of the 1.53 development series
+
+  One version skipped because of indexing problems.
+
+1.53_2 2016-02-03
+
+  [MISCELLANEOUS]
+
+  Add new FAQs
+
+1.53_1 2015-10-16
+
+  [BUG FIXES]
+
+  Strictly speaking this is a bug fix to DBI and not DBD::ODBC but DBI
+  now supports 64 bit row counts where an IV in perl is 64 bits. However, it
+  necessitated changes to DBD::ODBC to pick up the fix. odbc_rows (my workaround
+  since 2012) is still supported but should no longer be required so long as you
+  use this DBD::ODBC and DBI 1.633_92 or above.
+
+  [INTERNALS]
+
+  Removed dbd_st_rows and now setting DBIc_ROW_COUNT.
+
+  [DOCUMENTATION]
+
+  Add tables and table_info section to deviations from the DBI spec.
+
+  [MISCELLANEOUS]
+
+  Change column name in t/rt_101579.t as "method" is a reserved word
+  in. Teradata Thanks to Zhenyi Zhou.
+
+  Remove duplicate dynamic_config from META.yml.
+
+1.52 2015-04-15
+
+  [MISCELLANEOUS]
+
+  Changes to the test suite to make it run better with Postgres thanks
+  to Greg Sabino Mullane.
+
+1.51_4 2015-01-18
+
+  [BUG FIXES]
+
+  Numerous errors in the test suite (with SQLite ODBC driver) mostly down to not
+  creating the test table first.
+
+  [MISCELLANEOUS]
+
+  Try and make the test suite run ok for SQLite ODBC driver so I can use it
+  in travis-ci.
+
+1.51_3 2015-01-17
+
+  [BUG FIXES]
+
+  RT101579 - using bound input parameters for numeric columns (e.g.,
+  SQL_NUMERIC) only works the first time and will quite likely fail
+  with "string data, right truncation" on the second and subsequent
+  calls to execute. Thanks to Laura Cox for finding.
+
+1.51_2 2014-11-19
+
+  [BUG FIXES]
+
+  The table_info method (ANSI version only) was incorrectly passing
+  the table name for the type argument. I think this bug was
+  introduced last year. Thanks to Nick Gorham for spotting and providing
+  a fix.
+
+1.51_1 2014-11-14
+
+  [BUG FIXES]
+
+  RT100186 - handle VARBINARY(MAX) parameters with SQL Server native
+  client. Identify "libmsodbcsql*" as the MS ODBC Driver for Linux as
+  there are some specific workarounds for MS Native Client ODBC driver.
+
+1.50 2014-07-25
+
+  [BUG FIXES]
+
+  The 80_odbc_diags.t test could fail if a driver fails a table does
+  not exist test in the prepare instead of the execute.
+
+1.49_4 2014-07-08
+
+  [BUG FIXES]
+
+  Fixed sql_type_cast.t test which assumed column aliases which stay
+  lowercase.
+
+  Fixed 87_odbc_lob_read.t test which did not bow out of the test
+  properly if the database was not MS SQL Server.
+
+  [DOCUMENTATION]
+
+  Revised the query notification example and documentation.
+
+  Added a link to a better Query Notification article.
+
+1.49_3 2014-05-01
+
+  [CHANGE IN BEHAVIOUR]
+
+  As warned years ago, this release removes the odbc_old_unicode attribute.
+  If you have a good reason to use it speak up now before the next non-development
+  release.
+
+  [BUG FIXES]
+
+  Fix rt89255: Fails to create test table for tests using PostgreSQL odbc driver.
+  Change test suite to fallback on PRECISION if COLUMN_SIZE is not found.
+
+  [ENHANCEMENTS]
+
+  Added support for MS SQL Server Query Notification. See the new
+  section in the pod.
+
+  Added a currently undocumented (and experimental)
+  odbc_describe_param method on a statement handle which takes a
+  parameter number as the only argument and returns an array of the
+  data type, parameter size, decimal digits and nullable (as per
+  SQLDescribeParam).
+
+  [DOCUMENTATION]
+
+  Added FAQ on truncated column names with freeTDS.
+
+  [MISCELLANEOUS]
+
+  I have removed the "experimental" tag for odbc_getdiagfield and odbc_getdiagrec
+  methods.
+
+1.49_2 2014-04-26
+
+  [BUG FIXES]
+
+  Change to data_sources in 1.49_1 could lead to a compile error since
+  data_sources was not returning a value if an error occurred.
+
+1.49_1 2014-04-25
+
+  [BUG FIXES]
+
+  If you had a lot of DSNs on Windows (more than 280 but it depends on
+  the length of their names) and called the data_sources method it
+  could crash your script. Code internally changed to stop putting the DSNs
+  returned on the stack.
+
+  [CHANGE IN BEHAVIOUR]
+
+  As warned years ago, the private data_sources method has been
+  removed - use DBI one instead.
+
+  [MISCELLANEOUS]
+
+  Added FAQ entry of maximum number of allowed parameters.
+
+1.48 2014-03-03
+
+  [MISCELLANEOUS]
+
+  Manifest has wrong filename for 90_trace_flags.t
+
+  Forgot to remove warning from ODBC.pm that this is a development
+  release and unicode change when I released 1.47.
+
+1.47 2014-02-19
+
+  Full release of the 1.46 development releases.
+
+  [MISCELLANEOUS]
+
+  Just some tidying up of dbdimp.c - shouldn't make a difference to anyone.
+
+  Further changes to this change file to make it CPAN::Changes spec.
+  NOTE the changes.cpanhq.com site does not yet support "unknown" for
+  dates.
+
+1.46_2 2013-12-17
+
+  [BUG FIXES]
+
+  When built with unicode support and odbc_old_unicode is not enabled
+  columns reported as SQL_LONGVARCHAR were not by default bound as
+  SQL_WCHAR and hence were not returned correctly unless the bind was
+  overridden.
+
+  [MISCELLANEOUS]
+
+  Added test 90_trace_flag.t
+
+1.46_1 2013-11-16
+
+  [CHANGE IN BEHAVIOUR]
+
+  As warned in release 1.45, the binding of unicode parameters to
+  char/varchar columns has changed significantly. If you don't attempt
+  to insert unicode into char/varchar columns or if you only inserted
+  unicode into nchar/nvarchar columns you should see no difference.
+  From this release, unicode data inserted into
+  char/varchar/longvarchar columns is bound as SQL_WCHAR and not
+  whatever the driver reports the parameter as (which is mostly
+  SQL_CHAR).
+
+  Previously if DBD::ODBC received an error or (SQL_SUCCESS_WITH_INFO)
+  from an ODBC API call and then the driver refused to return the
+  error state/text DBD::ODBC would issue its own error saying "Unable
+  to fetch information about the error" and state IM008. That state
+  was wrong and has been changed to HY000.
+
+  [BUG FIXES]
+
+  Some drivers cannot support catalogs and/or schema names in
+  SQLTables.  Recent changes set the schema/catalog name to the empty
+  string (good reasons below) which causes "optional feature not
+  implemented" from MS Access (which does not support schemas - even
+  for a simply ping (which uses SQLTables)). Now we call
+  SQLCATALOG_NAME and SQLSCHEMA_USAGE on connect to ascertain support
+  which modifies SQLTables call.
+
+  [MISCELLANEOUS]
+
+  Added test 45_unicode_varchar.t for MS SQL Server only so far.
+
+1.45 2013-10-28
+
+  [CHANGE IN BEHAVIOUR]
+
+  There is no intentional change in behaviour in this release but I'm
+  adding a warning that the next development release is highly liking
+  to contain some significant unicode changes in behaviour to fix some
+  bugs which have been around for quite a long time now.
+
+  [BUG FIXES]
+
+  If an SQLExecute ODBC API call returned SQL_NO_DATA DBD::ODBC was
+  still calling SQLError (which was a waste of time).
+
+  Since 1.44_1 odbc_out_connect_string stopped returning anything.
+
+  [MISCELLANEOUS]
+
+  Added another link to resources for supplementary characters.
+
+  Added 1 more test to 20SqlServer.t for update statement.
+
+  Small changes to 20SqlServer.t test to skip some tests and note the
+  problem if SQLExecute returns SQL_NO_DATA on a non searched update.
+
+1.44_4 2013-10-16
+
+  [BUG FIXES]
+
+  Fix method redefinition warnings in threads on Perl >= 5.16 thanks
+  Dagfinn Ilmari Mannsåker
+
+  [MISCELLANEOUS]
+
+  Changed this Changes file to be closer to the version 0.03 change
+  file spec.
+
+  Added t/version.t test.
+
+  Added recommends Test::Version.
+
+  Updates to the odbc_more_results pod to help clarify its use after
+  some confusion was seen in a perlmonks thread.
+
+1.44_3 2013-10-11
+
+  [CHANGE IN BEHAVIOUR]
+
+  If you attempt to set the ReadOnly attribute and the underlying
+  ODBC driver does not support this (SQL_SUCCESS_WITH_INFO and "option
+  value changed" is returned) a warning is issued. However, until RT
+  89015 "You cannot issue a warning in the STORE method" in DBI is
+  resolved you won't get this warning. As DBI 1.628 it is not
+  resolved. I've only seen the SQLite ODBC driver do this.
+
+  If you set ReadOnly and the underlying ODBC driver does not
+  support this then any subsequent attempts to fetch the ReadOnly
+  attribute will return the value you set.
+
+  [BUG FIXES]
+
+  The 82_table_info test assumed all database and ODBC Drivers
+  supported catalogs and schemas (some don't). Use get_info to
+  find out if catalogs and schemas are supported before
+  running these tests.
+
+  The rt_79190.t could incorrectly fail if your test DSN contained
+  the DRIVER attribute.
+
+  [MISCELLANEOUS]
+
+  Added RedHat spec file to examples courtesy of Michiel Beijen.
+
+  Added "use strict" to FAQ/Changes etc to quieten kwalitee test.
+
+  Added a workaround in the test suite for a probable bug in the
+  postgres ODBC driver which does not return COLUMN_SIZE from
+  SQLGetTypeInfo. It also issues a warning.  See
+  http://www.postgresql.org/message-id/524EF455.6050409@ntlworld.com
+
+1.44_3 2013-10-11
+
+  [MISCELLANEOUS]
+
+  Skip 70execute_array_native.t test if MS Access - even if behind an
+  ODBC Bridge.
+
+  Fixed some compiler warnings when attempting to print/trace SvCUR.
+
+1.44_2 2013-09-07
+
+  [BUG FIXES]
+
+  When table_info was called with a '%' for any one of the catalog,
+  schema or type arguments with the rest all '' (the empty string),
+  only a list of catalogs, schemas or types should be returned. It was
+  not doing that as it was changing empty strings to undef/NULL.
+
+  pod for odbc_lob_read had an example only saying lob_read.
+
+  TYPE attribute for odbc_lob_read was actually coded as Type.  It is
+  now as documented.
+
+  The example lob_read.pl had the TYPE set to 999 from when I was
+  testing it but it got checked in like this.
+
+  MANIFEST contained column_info.pl but the file was coltest.pl
+
+  [MISCELLANEOUS]
+
+  Fixed RT 86379 - spelling mistakes in ODBC.pm and FAQ - thanks
+  to David Steinbrunner.
+
+  Added 82_table_info.t test.
+
+  Added 87_odbc_log_read.t test.
+
+1.44_1 2013-06-06
+
+  Moved from subversion to github as svn.perl.org is closing down.
+  Changed docs to show new repository.
+
+  [BUG FIXES]
+
+  Fixed RT 84450 - Database Handle Attribute Fetch broken. Thanks to
+  Stephen Oberholtzer for finding and supplying patch.
+
+  Fixed problem with attributes on bind_col not being sticky. You'll
+  probably only see this if you are using fetchall_arrayref with a
+  slice and setting TYPE or attributes in bind_col first.
+
+1.43 2013-03-06
 
   This is a full release of all the 1.42_* development releases.
 
   plus:
 
-  [Bug FIXES]
+  [BUG FIXES]
 
   Minor fix to 10handler.t test suite which relied on a native error
   being true instead of defined.
 
-=head2 Changes in DBD::ODBC 1.42_5 January 25 2013
+1.42_5 2013-01-25
 
   [BUG FIXES]
 
   Not all modules used in test code were specified in build_requires.
 
-=head2 Changes in DBD::ODBC 1.42_4 January 21 2013
+1.42_4 2013-01-21
 
   [ENHANCEMENTS]
 
   odbc_trace and odbc_trace_file are now full connection attributes
   so you can set them any time you like, not just in connect.
 
-=head2 Changes in DBD::ODBC 1.42_3 January 17 2013
+1.42_3 2013-01-17
 
   [ENHANCEMENTS]
 
@@ -42,7 +449,7 @@ $Revision: 10667 $
   only enable ODBC API tracing in the application which made the call
   unlike the ODBC Driver Manager settings.
 
-=head2 Changes in DBD::ODBC 1.42_2 December 17 2012
+1.42_2 2012-12-17
 
   [MISCELLANEOUS]
 
@@ -50,7 +457,7 @@ $Revision: 10667 $
   from Dave Mitchell and posting at
   http://www.xray.mpe.mpg.de/mailing-lists/perl5-porters/2012-12/msg00424.html.
 
-=head2 Changes in DBD::ODBC 1.42_1 December 12 2012
+1.42_1 2012-12-12
 
   [BUG FIXES]
 
@@ -79,7 +486,7 @@ $Revision: 10667 $
 
   New rt_81911.t test case.
 
-=head2 Changes in DBD::ODBC 1.42_0 November 28 2012
+1.42_0 2012-11-28
 
   [BUG FIXES]
 
@@ -112,11 +519,11 @@ $Revision: 10667 $
 
   RT 80446 - fix spelling mistake - thanks to Xavier Guimar.
 
-=head2 Changes in DBD::ODBC 1.41 October 23 2012
+1.41 2012-10-23
 
   A full release of the 1.40 development release series.
 
-=head2 Changes in DBD::ODBC 1.40_3 October 8 2012
+1.40_3 2012-10-08
 
   [BUG FIXES]
 
@@ -139,7 +546,7 @@ $Revision: 10667 $
 
   More documentation for odbc_out_connect_string.
 
-=head2 Changes in DBD::ODBC 1.40_2 September 6 2012
+1.40_2 2012-09-06
 
   [BUG FIXES]
 
@@ -158,7 +565,7 @@ $Revision: 10667 $
 
   Added Test::NoWarnings to some tests where it was missing.
 
-=head2 Changes in DBD::ODBC 1.40_1 September 4 2012
+1.40_1 2012-09-04
 
   [BUG FIXES]
 
@@ -184,7 +591,7 @@ $Revision: 10667 $
   If you attempt to bind an rv without amagic DBD::ODBC will now
   croak - related to rt 78838.
 
-=head2 Changes in DBD::ODBC 1.39 July 7 2012
+1.39 2012-07-07
 
   [BUG FIXES]
 
@@ -194,7 +601,7 @@ $Revision: 10667 $
   execute_for_fetch.pl example had not be changed since
   odbc_disable_array_operations became odbc_array_operations.
 
-=head2 Changes in DBD::ODBC 1.38_3 June 25 2012
+1.38_3 2012-06-25
 
   [BUG FIXES]
 
@@ -210,14 +617,14 @@ $Revision: 10667 $
 
   Made pod.t an author test.
 
-=head2 Changes in DBD::ODBC 1.38_2 May 24 2012
+1.38_2 2012-05-24
 
   [ENHANCEMENTS]
 
   Added support for Oracle TAF (assuming your ODBC driver supports it)
   - see odbc_taf_callback.
 
-=head2 Changes in DBD::ODBC 1.38_1 May 19 2012
+1.38_1 2012-05-19
 
   [BUG FIXES]
 
@@ -259,13 +666,13 @@ $Revision: 10667 $
 
   sql_type_cast tests rewritten due to fixes above.
 
-=head2 Changes in DBD::ODBC 1.37 April 7 2012
+1.37 2012-04-07
 
   A full release of the 1.36 dev releases.
 
   Please note the changes in behaviour below.
 
-=head2 Changes in DBD::ODBC 1.36_2 March 31 2012
+1.36_2 2012-03-31
 
   [BUG FIXES]
 
@@ -287,7 +694,7 @@ $Revision: 10667 $
 
   * Changed ordering of some of the pod sections.
 
-=head2 Changes in DBD::ODBC 1.36_1 March 21 2012
+1.36_1 2012-03-21
 
   [BUG FIXES]
 
@@ -359,18 +766,18 @@ $Revision: 10667 $
 
   * Made the 2 unicode tests work with DB2 ODBC driver.
 
-=head2 Changes in DBD::ODBC 1.35 March 6 2012
+1.35 2012-03-06
 
   Full release of the 1.34 development releases
 
-=head2 Changes in DBD::ODBC 1.34_7 March 2 2012
+1.34_7 2012-03-02
 
   [BUG FIXES]
 
   * Fixed more compiler errors highlighed by a smoker using MS Visual
     C where some code come before a variable definition.
 
-=head2 Changes in DBD::ODBC 1.34_6 February 27 2012
+1.34_6 2012-02-27
 
   [BUG FIXES]
 
@@ -378,7 +785,7 @@ $Revision: 10667 $
     smoker using MS Visual C where some code come before a variable
     definition.
 
-=head2 Changes in DBD::ODBC 1.34_5 February 17 2012
+1.34_5 2012-02-17
 
   [BUG FIXES]
 
@@ -426,7 +833,7 @@ $Revision: 10667 $
 
   * Add 80_odbc_diags.t based on the same file in examples
 
-=head2 Changes in DBD::ODBC 1.34_4 February 5 2012
+1.34_4 2012-02-05
 
   [BUG FIXES]
 
@@ -434,7 +841,7 @@ $Revision: 10667 $
     into DBI but did not set IMP_KEEP_ERR so calling them cleared
     DBI's errors.
 
-=head2 Changes in DBD::ODBC 1.34_3 February 3 2012
+1.34_3 2012-02-03
 
   [BUG FIXES]
 
@@ -456,7 +863,7 @@ $Revision: 10667 $
 
   * New FAQ entries.
 
-=head2 Changes in DBD::ODBC 1.34_2 January 25 2012
+1.34_2 2012-01-25
 
   [BUG FIXES]
 
@@ -479,19 +886,19 @@ $Revision: 10667 $
 
   * Added example execute_for_fetch.pl
 
-=head2 Changes in DBD::ODBC 1.34_1 December 11 2011
+1.34_1 2011-12-11
 
   [ENHANCEMENTS]
 
   * Added experimental execute_for_fetch support and associated
     attributes odbc_batch_size and odbc_disable_array_operations.
 
-=head2 Changes in DBD::ODBC 1.33 December 1 2011
+1.33 2011-12-01
 
   This is simply the official release of the 1.32 development
   releases.
 
-=head2 Changes in DBD::ODBC 1.32_5 November 24 2011
+1.32_5 2011-11-24
 
   [ENHANCEMENTS]
 
@@ -501,7 +908,7 @@ $Revision: 10667 $
   * Change column_info to support Unicode catalog/schema/table/column
     names.
 
-=head2 Changes in DBD::ODBC 1.32_4 November 22 2011
+1.32_4 2011-11-22
 
   [BUG FIXES]
 
@@ -515,7 +922,7 @@ $Revision: 10667 $
 
   * Use SQLGetTypeInfoW on unicode builds.
 
-=head2 Changes in DBD::ODBC 1.32_3 November 15 2011
+1.32_3 2011-11-15
 
   [BUG FIXES]
 
@@ -529,7 +936,7 @@ $Revision: 10667 $
     passed to table_info. Of course they will only reliably work with
     a supporting Unicode ODBC driver.
 
-=head2 Changes in DBD::ODBC 1.32_2 October 22 2011
+1.32_2 2011-10-22
 
   [ENHANCEMENTS]
 
@@ -548,7 +955,7 @@ $Revision: 10667 $
   * added note saying you cannot pass unicode schema/table/column
     names to metadata calls like table_info/column_info currently.
 
-=head2 Changes in DBD::ODBC 1.32_1 June 24 2011
+1.32_1 2011-06-24
 
   [BUG FIXES]
 
@@ -564,7 +971,7 @@ $Revision: 10667 $
 
   * Added unicode_sql.pl and unicode_params.pl examples
 
-=head2 Changes in DBD::ODBC 1.31 June 21, 2011
+1.31 2011-06-21
 
   [BUG FIXES]
 
@@ -574,7 +981,7 @@ $Revision: 10667 $
   Minor change to Makefile.PL to avoid use of unitialised warning on
   $ENV{LD_LIBRARY_PATH} in warning when it is not set.
 
-=head2 Changes in DBD::ODBC 1.30_7 June 15, 2011
+1.30_7 2011-06-15
 
   [BUG FIXES]
 
@@ -594,7 +1001,7 @@ $Revision: 10667 $
   SQL_ERROR (-1) for errors or SQL_SUCCESS_WITH_INFO (1) for
   informational messages.
 
-=head2 Changes in DBD::ODBC 1.30_6 June 4, 2011
+1.30_6 2011-06-04
 
   [BUG FIXES]
 
@@ -620,7 +1027,7 @@ $Revision: 10667 $
   * pod example of odbc_err_handler incorrectly used \$err_handler
     instead of \&err_handler.
 
-=head2 Changes in DBD::ODBC 1.30_5 May 24, 2011
+1.30_5 2011-05-24
 
   [BUG FIXES]
 
@@ -629,7 +1036,7 @@ $Revision: 10667 $
     http://rt.cpan.org/Ticket/Display.html?id=67994). It was working
     for SQL_CHAR described columns but not SQL_VARCHAR.
 
-=head2 Changes in DBD::ODBC 1.30_4 May 18, 2011
+1.30_4 2011-05-18
 
   [BUG FIXES]
 
@@ -653,19 +1060,19 @@ $Revision: 10667 $
 
   * TreatAsLob was incorrectly documented as BindAsLob.
 
-=head2 Changes in DBD::ODBC 1.30_3 May 17, 2011
+1.30_3 2011-05-17
 
   [BUG FIXES]
 
   * Made the new odbc_describe_parameters work and added test case.
 
-=head2 Changes in DBD::ODBC 1.30_2 May 16, 2011
+1.30_2 2011-05-16
 
   [ENHANCEMENTS]
 
   * Added the new odbc_describe_parameters attribute.
 
-=head2 Changes in DBD::ODBC 1.30_1 May 12, 2011
+1.30_1 2011-05-12
 
   [BUG FIXES]
 
@@ -720,7 +1127,7 @@ $Revision: 10667 $
   * Removed some unused variables and added some missing function
     prototypes
 
-=head2 Changes in DBD::ODBC 1.29 March 8, 2011
+1.29 2011-03-08
 
   * An official release of the 1.28 development releases.
 
@@ -735,7 +1142,7 @@ $Revision: 10667 $
     because SQLRowCount returns an error after "ROLLBACK TO SAVEPOINT
     savepoint_0"; before this error was missed.
 
-=head2 Changes in DBD::ODBC 1.28_5 March 6, 2011
+1.28_5 2011-03-06
 
   [BUG FIXES]
 
@@ -780,7 +1187,7 @@ $Revision: 10667 $
   * Improvements in tracing to take account of DBI's neatsvpv lops 5
     characters off maxsize on a string.
 
-=head2 Changes in DBD::ODBC  1.28_4 February 24, 2011
+1.28_4 2011-02-24
 
   [BUG FIXES]
 
@@ -788,7 +1195,7 @@ $Revision: 10667 $
 
   * Added missing disconnect call to 70execute_array.t
 
-=head2 Changes in DBD::ODBC  1.28_3 February 22, 2011
+ 1.28_3 2011-02-22
 
   [BUG FIXES]
 
@@ -825,7 +1232,7 @@ $Revision: 10667 $
 
   * Added 70execute_array.t test.
 
-=head2 Changes in DBD::ODBC  1.28_2 January 24, 2011
+ 1.28_2 2011-01-24
 
   Added -x argument to Makefile.PL saying you prefer unixODBC over
   iODBC driver managers as a) we need to look for iODBC first on some
@@ -852,7 +1259,7 @@ $Revision: 10667 $
   A call to SQLNumResultCols was not checked to test it succeeded.
   Not seen anyone run into this as yet.
 
-=head2 Changes in DBD::ODBC  1.28_1 December 29, 2010
+ 1.28_1 2010-12-29
 
   Rewrote documentation on odbc_SQL_ROWSET_SIZE and added loads of
   notes so I don't have to go through a huge irc conversation with
@@ -877,11 +1284,11 @@ $Revision: 10667 $
 
   Tidied up some of the examples
 
-=head2 Changes in DBD::ODBC  1.27 December 29, 2010
+ 1.27 2010-12-29
 
   Official release of the 1.26 development releases.
 
-=head2 Changes in DBD::ODBC  1.26_4 December 14, 2010
+1.26_4 2010-12-14
 
   Fixed bug highlighted by investigation into rt 62033 where the
   active flag was sometimes not set on the statement after
@@ -897,19 +1304,19 @@ $Revision: 10667 $
   Fix a possible snprintf buffer overflow in GetTypeInfo when
   the type is specified and it is negative.
 
-=head2 Changes in DBD::ODBC  1.26_3 November 18, 2010
+1.26_3 2010-11-18
 
   Fixed rt 63108. The change to column binding in 1.24_2 was not
   complete and causes bound columns to be rebound on each execute
   wasting time and leaking memory. Found, diagnosed and proposed fix
   by Steve Bentley.
 
-=head2 Changes in DBD::ODBC  1.26_2 November 9, 2010
+1.26_2 2010-11-09
 
   Fixed bug found by frew where an snprintf can overflow when binding
   a lot of parameters.
 
-=head2 Changes in DBD::ODBC  1.26_1 October 24, 2010
+1.26_1 2010-10-24
 
   There are over 200 block changes in the source code for this release
   from the previous one (see below). If you are using DBD::ODBC in
@@ -992,17 +1399,17 @@ $Revision: 10667 $
     Removed dbd_caution as it was no used
     Localised more variable declarations
 
-=head2 Changes in DBD::ODBC  1.25 September 22, 2010
+1.25 2010-09-22
 
   Official release of 1.25 combining all the changes in the 1.24_x
   development releases.
 
-=head2 Changes in DBD::ODBC  1.24_6 September 16, 2010
+1.24_6 2010-09-16
 
   rt 61370 - default XML type parameters in SQL Server to SQL_WCHAR so
   they accept unicode strings.
 
-=head2 Changes in DBD::ODBC  1.24_5 September 15, 2010
+1.24_5 2010-09-15
 
   Fixed missing SvSETMAGIC on a bound scalar which was causing length() to
   return the wrong result - see http://www.perlmonks.org/?node_id=860211
@@ -1011,13 +1418,13 @@ $Revision: 10667 $
   Changed bind_col so it actually pays attention to the TYPE attribute as
   you could not override the bind type of a bound column before.
 
-=head2 Changes in DBD::ODBC  1.24_4 September 8, 2010
+1.24_4 2010-09-08
 
   Left a sv_undef in - thanks smoke testers for finding that.
 
   Change sprintf to snprintf for safety.
 
-=head2 Changes in DBD::ODBC  1.24_3 September 6, 2010
+1.24_3 2010-09-06
 
   Added note from Robert Freimuth for obtaining the last insert ID in MS
   Access.
@@ -1030,7 +1437,7 @@ $Revision: 10667 $
   Added a FAQ entry for how "use regional settings" in MS SQL Server
   breaks things.
 
-=head2 Changes in DBD::ODBC  1.24_2 July 23, 2010
+1.24_2 2010-07-23
 
   Fix rt57957 reported by Marc Prewitt. DBD::ODBC was not ignoring named
   placeholders and ? inside comments. Comments are deemed as text between
@@ -1073,7 +1480,7 @@ $Revision: 10667 $
   Added note on do method implementation in DBD::ODBC and how some may
   consider it to deviate from the DBI specification.
 
-=head2 Changes in DBD::ODBC  1.24_1 May 27, 2010
+1.24_1 2010-05-27
 
   Corrected pod and private attributes for the odbc_SQL_DRIVER_ODBC_VER
   attribute which was documented as SQL_DRIVER_ODBC_VER.
@@ -1087,14 +1494,14 @@ $Revision: 10667 $
   error. Thanks to anonymous for spotting this and producing a standalone
   example of the problem that made it so much easier to find.
 
-=head2 Changes in DBD::ODBC  1.24 May 14, 2010
+1.24 2010-05-14
 
   Minor change in Makefile.PL to only use NO_META if ExtUtils::MakeMaker
   is at least at version 6.10. Reported by Chunmei Wu.
 
   Minor change to test rt_50852 which had wrong skip count.
 
-=head2 Changes in DBD::ODBC  1.23_5 May 6, 2010
+1.23_5 2010-05-06
 
   Added advice from Jan Dubois (ActiveState) on building DBD::ODBC for
   ActivePerl (see README.windows).
@@ -1107,7 +1514,7 @@ $Revision: 10667 $
   Hopefully fixed problems building on windows 32 bit platforms that have
   old sql header files not mentioning SQLLEN/SQLULEN.
 
-=head2 Changes in DBD::ODBC  1.23_4 April 13, 2010
+1.23_4 2010-04-13
 
   Added more FAQs.
 
@@ -1132,7 +1539,7 @@ $Revision: 10667 $
   parameter is varXXX(max) if SQLDescribeParam failed in the Microsoft
   Native Client driver.
 
-=head2 Changes in DBD::ODBC  1.23_3 March 24, 2010
+1.23_3 2010-03-24
 
   Minor changes to Makefile.PL and dbdimp.c to remove some compiler
   warnings.
@@ -1148,7 +1555,7 @@ $Revision: 10667 $
   consistent wrt to case - (as someone had turned on case-sensitivity in
   SQL Server) Similar changes in rt_38977.t and rt_50852.t
 
-=head2 Changes in DBD::ODBC  1.23_2 January 26, 2010
+1.23_2 2010-01-26
 
   Fixed bug in Makefile.PL which could fail to find unixODBC/iODBC header
   files but not report it as a problem. Thanks to Thomas J. Dillman and
@@ -1161,7 +1568,7 @@ $Revision: 10667 $
   ODBC Drivers which support SQLDescribeParam but describe the parameters
   incorrectly (see rt 50852). Test case also added as rt_50852.t.
 
-=head2 Changes in DBD::ODBC  1.23_1 October 21, 2009
+1.23_1 2009-10-21
 
   makefile.PL changes:
     some formatting changes to output warn if unixodbc headers are not
@@ -1195,12 +1602,12 @@ $Revision: 10667 $
   PostgreSQL) which returns all strings as UTF-8 encoded unicode.  Thanks
   to Noel Burton-Krahn.
 
-=head2 Changes in DBD::ODBC 1.23 September 11, 2009
+1.23 2009-09-11
 
   Only a readme change and version bumped to 1.23. This is a full release
   of all the 1.22_x development releases.
 
-=head2 Changes in DBD::ODBC 1.22_3 August 19, 2009
+1.22_3 2009-08-19
 
   Fix skip count in rt_38977.t and typo in ok call.
 
@@ -1244,7 +1651,7 @@ $Revision: 10667 $
   driver to pull the username/password from elsewhere e.g., like the
   odbc.ini file.
 
-=head2 Changes in DBD::ODBC 1.22_1 June 16, 2009
+1.22_1 2009-06-16
 
   Applied a slightly modified version of patch from Jens Rehsack to
   improve support for finding the iODBC driver manager.
@@ -1266,7 +1673,7 @@ $Revision: 10667 $
   rt_null_varchar had wrong skip count meaning non-sql-server drivers or
   sql server drivers too old skipped 2 tests more than were planned.
 
-=head2 Changes in DBD::ODBC 1.22 June 10, 2009
+1.22 2009-06-10
 
   Fixed bug which led to "Use of uninitialized value in subroutine entry"
   warnings when writing a NULL into a NVARCHAR with a unicode-enabled
@@ -1284,7 +1691,7 @@ $Revision: 10667 $
   If you use a UNICODE enabled DBD::ODBC (the default on Windows) and
   unicode strings larger than 64K you should definitely upgrade now.
 
-=head2 Changes in DBD::ODBC 1.21_1 June 2, 2009
+1.21_1 2009-06-02
 
   Fixed bug referred to in rt 46597 reported by taioba and identified by
   Tim Bunce. In Calls to bind_param for a given statement handle if you
@@ -1303,7 +1710,7 @@ $Revision: 10667 $
   some DBDs allow the parameter to be rebound with a different type -
   DBD::ODBC is one of those drivers.
 
-=head2 Changes in DBD::ODBC 1.21 April 27, 2009
+1.21 2009-04-27
 
   Change 02simple test to output Perl, DBI and DBD::ODBC versions.
 
@@ -1317,7 +1724,7 @@ $Revision: 10667 $
 
   Added test_results.txt containing some supplied make test results.
 
-=head2 Changes in DBD::ODBC 1.20 April 20, 2009
+1.20 2009-04-20
 
   Fix bug in handling of SQL_WLONGVARCHAR when not built with unicode
   support.  The column was not identified as a long column and hence the
@@ -1346,7 +1753,7 @@ $Revision: 10667 $
 
   Double the buffer size used for column names if built with unicode.
 
-=head2 Changes in DBD::ODBC 1.19 April 2, 2009
+1.19 2009-04-02
 
   Some minor diagnostic output during tests when running against freeTDS
   to show we know of issues in freeTDS.
@@ -1387,7 +1794,7 @@ $Revision: 10667 $
   Added diagnostic output to 02simple.t to show the state of
   odbc_has_unicode.
 
-=head2 Changes in DBD::ODBC 1.18_4 March 13, 2009
+1.18_4 2009-03-13
 
   A mistake in the MANIFEST lead to the rt_43384.t test being omitted.
 
@@ -1414,13 +1821,13 @@ $Revision: 10667 $
   which was not done after testing if we are using SQL Server - this was
   breaking tests to MS Access.
 
-=head2 Changes in DBD::ODBC 1.18_2 March 9, 2009
+1.18_2 2009-03-09
 
   Added yet another workaround for the SQL Server Native Client driver
   version 2007.100.1600.22 and 2005.90.1399.00 (driver version 09.00.1399)
   which leads to HY104, "Invalid precision value" in the rt_39841.t test.
 
-=head2 Changes in DBD::ODBC 1.18_1 March 6, 2009
+1.18_1 2009-03-06
 
   Fixed bug reported by Toni Salomäki leading to a describe failed error
   when calling procedures with no results. Test cases added to
@@ -1430,11 +1837,11 @@ $Revision: 10667 $
   more than 127 characters into a Microsoft Access text(255) column when
   DBD::ODBC is built in unicode mode.
 
-=head2 Changes in DBD::ODBC 1.18 January 16, 2009
+1.18 2009-01-16
 
   Major release of all the 1.17 development releases below.
 
-=head2 Changes in DBD::ODBC 1.17_3 December 19, 2008
+1.17_3 2008-12-19
 
   Reinstated the answer in the FAQ for "Why do I get invalid value for
   cast specification" which had got lost - thanks to EvanCarroll in
@@ -1464,7 +1871,7 @@ $Revision: 10667 $
   One of the rt tests was not skipping the correct number of tests if the
   driver was not SQL Server.
 
-=head2 Changes in DBD::ODBC 1.17_2 November 17, 2008
+1.17_2 2008-11-17
 
   Changed ParamTypes attribute to be as specification i.e.,
 
@@ -1483,7 +1890,7 @@ $Revision: 10667 $
   Added patch from Spicy Jack to workaround problems with Strawberry Perl
   setting INC on the command line when running Makefile.PL.
 
-=head2 Changes in DBD::ODBC 1.17_1 October 10, 2008
+1.17_1 2008-10-10
 
   Missing newline from end of META.yml upsets cpan
 
@@ -1513,7 +1920,7 @@ $Revision: 10667 $
 
   Added a test case for rt 39897.
 
-=head2 Changes in DBD::ODBC 1.17 September 22, 2008
+1.17 2008-09-22
 
   In the absence of any bug reports since 1.16_4 this is the official 1.17
   release. See below for changes since 1.16.
@@ -1522,7 +1929,7 @@ $Revision: 10667 $
 
   Added support for ParamTypes (see DBI spec) and notes in DBD::ODBC pod.
 
-=head2 Changes in DBD::ODBC 1.16_4 September 12, 2008
+1.16_4 2008-09-12
 
   Small change to Makefile.PL to work around problem in darwin 8 with
   iODBC which leads to "Symbol not found: _SQLGetPrivateProfileString"
@@ -1548,7 +1955,7 @@ $Revision: 10667 $
 
   Fixed bug in 20SqlServer.t when DBI_DSN is defined including "DSN=".
 
-=head2 Changes in DBD::ODBC 1.16_3 September 3, 2008
+1.16_3 2008-09-03
 
   Changed Makefile.PL to add "-framework CoreFoundation" to linker line on
   OSX/darwin.
@@ -1587,7 +1994,7 @@ $Revision: 10667 $
   varchar(max) column. Thanks to Julian Lishev for finding the problem and
   identifying 2 possible solutions.
 
-=head2 Changes in DBD::ODBC 1.16_2 September 2, 2008
+1.16_2 2008-09-02
 
   Removed szDummyBuffer field from imp_fbh_st and code in dbd_describe
   which clears it. It was never used so this was a waste of time.
@@ -1653,7 +2060,7 @@ $Revision: 10667 $
   New odbc_out_connect_string attribute for connections which returns the
   ODBC driver out connection string.
 
-=head2 Changes in DBD::ODBC 1.16_1 August 28, 2008
+1.16_1 2008-08-28
 
   Fixed bug in odbc_cancel which was checking the ACTIVE flag was on
   before calling SQLCancel. Non-select statements can also be cancelled so
@@ -1705,9 +2112,9 @@ $Revision: 10667 $
 
   New tests in 30Oracle.t for oracle procedures.
 
-=head2 Changes in DBD::ODBC 1.16 May 13, 2008
+1.16 2008-05-13
 
-=head3 Test Changes
+  [TESTS]
 
   Small change to the last test in 10handler.t to cope with the prepare
   failing instead of the execute failing - spotted by Andrei Kovalevski
@@ -1732,7 +2139,7 @@ $Revision: 10667 $
 
   New tests for numbered and named placeholders.
 
-=head3 Documentation Changes
+  [DOCUMENTATION]
 
   Added references to DBD::ODBC ohloh listing and markmail archives.
 
@@ -1749,7 +2156,7 @@ $Revision: 10667 $
 
   Added a README.osx.
 
-=head3 Internal Changes
+  [INTERNAL CHANGES]
 
   More tracing in dbdimp.c for named parameters.
 
@@ -1763,7 +2170,7 @@ $Revision: 10667 $
   levels 1 and 2 which are reserved for DBI. Now using DBIc_TRACE macro
   internally.  Also tracing SQL when 'SQL' flag set.
 
-=head3 Build Changes
+  [BUILD CHANGES]
 
   Changes to Makefile.PL to fix a newly introduced bug with 'tr', remove
   easysoft OOB detection and to try and use odbc_config and odbcinst if we
@@ -1773,7 +2180,7 @@ $Revision: 10667 $
   Avoid warning when testing ExtUtils::MakeMaker version and it is a test
   release with an underscore in the version.
 
-=head3 Functionality Changes
+  [ENHANCEMENTS]
 
   Added support for parse_trace_flag and parse_trace_flags methods and
   defined a DBD::ODBC private flag 'odbcdev' as a test case.
@@ -1787,7 +2194,7 @@ $Revision: 10667 $
 
   Added support for DBI's statistics_info method.
 
-=head3 Bug Fixes
+  [BUG FIXES]
 
   Fix bug in support for named placeholders leading to error "Can't rebind
   placeholder" when there is more than one named placeholder.
@@ -1810,7 +2217,7 @@ $Revision: 10667 $
   execute and some drivers (SQL Server) insist a procedure is not finished
   until SQLMoreResults returns SQL_NO_DATA.
 
-=head2 Changes in DBD::ODBC 1.15 January 29, 2008
+1.15 2008-01-29
 
   1.15 final release.
 
@@ -1838,7 +2245,7 @@ $Revision: 10667 $
   Now if DBI::DBD is not installed we just warn and exit 0 to avoid a
   cpan-testers failure.
 
-=head2 Changes in DBD::ODBC 1.15_2 November 14, 2007
+1.15_2 2007-11-14
 
   Fix bug in DBD::ODBC's private function data_sources which was returning
   data sources prefixed with "DBI:ODBC" instead of "dbi:ODBC".
@@ -1880,7 +2287,7 @@ $Revision: 10667 $
 
   Fix a possible typo, used once in 10handler.t.
 
-=head2 Changes in DBD::ODBC 1.15_1 November 6, 2007
+1.15_1 2007-11-06
 
   Minor changes to 20SqlServer.t test for SQL Server 2008 (Katmai).
   Timestamps now return an extra 4 digits of precision (all 0000) and the
@@ -1943,7 +2350,7 @@ $Revision: 10667 $
   Changed dual tests on SQL_SUCCESS and SQL_SUCCESS_WITH_INFO to use
   SQL_SUCCEEDED.
 
-=head2 Changes in DBD::ODBC 1.14 July 17, 2007
+1.14 2007-07-17
 
   Fix bug reported where ping crashes after disconnect thanks to Steffen
   Goeldner.
@@ -2022,7 +2429,7 @@ $Revision: 10667 $
 
   Add some HTTP links to useful tutorials on DBD::ODBC
 
-=head2 Changes in DBD::ODBC 1.13 November 8, 2004
+1.13 2004-11-08
 
   Fix inconsistency/bug with odbc_exec_direct vs. odbc_execdirect
   settings.  Now made consistent with odbc_exec_direct.  For now, will
@@ -2042,7 +2449,7 @@ $Revision: 10667 $
   Fix Oracle integral/numeric output params so that warning not printed
   about value not being numeric (even though it is!)
 
-=head2 Changes in DBD::ODBC 1.12 October 26, 2004
+1.12 2004-10-26
 
   Fix bug with odbc_execdirect attributed thanks to Martin Evans
 
@@ -2050,11 +2457,11 @@ $Revision: 10667 $
   tests failed with setting timeout.  Probably not handled by Oracle's
   ODBC driver
 
-=head2 Changes in DBD::ODBC 1.11 October 11, 2004
+1.11 2004-10-11
 
   Added odbc_timeout, but untested
 
-=head2 Changes in DBD::ODBC 1.10 September 8, 2004
+1.10 2004-09-08
 
   Fixed bug in Makefile.PL.
 
@@ -2064,12 +2471,12 @@ $Revision: 10667 $
 
   Fixed bug in bind_param_inout
 
-=head2 Changes in DBD::ODBC 1.09 March 10, 2004
+1.09 2004-03-10
 
   Duh.  I forgot to add new dbivport.h to MANIFEST and SVN before
   submitting.  Fixed.
 
-=head2 Changes in DBD::ODBC 1.08 March 6, 2004
+1.08 2004-03-06
 
   Added check in Makefile.PL to detect if the environment variable LANG is
   Set.  If so, prints a warning about potential makefile generation
@@ -2082,7 +2489,7 @@ $Revision: 10667 $
   permit them -- tested with SQL Server.  Thanks to Martin Busik!  See
   odbc_cursortype information in the ODBC POD.
 
-=head2 Changes in DBD::ODBC 1.07 February 19, 2004
+1.07 2004-02-19
 
   Added to Subversion version control hosted by perl.org.  Thanks Robert!
   See ODBC.pm POD for more information.
@@ -2096,7 +2503,7 @@ $Revision: 10667 $
 
   Fix for SQLForeignKeys thanks to Kevin Shepherd.
 
-=head2 Changes in DBD::ODBC 1.06 June 19, 2003
+1.06 2003-06-19
 
   Fixed test in t/02simple.t to skip if the DSN defined by the user has
   DSN= in it.
@@ -2113,7 +2520,7 @@ $Revision: 10667 $
   Updated Makefile.PL for dmake, per patch by Steffen Goldner.  Thanks
   Steffen!
 
-=head2 Changes in DBD::ODBC 1.05 March 14, 2003
+1.05 2003-03-14
 
   Cleaned up Makefile.PL and added Informix support thanks to Jonathan
   Leffler (see README.informix)
@@ -2133,7 +2540,7 @@ $Revision: 10667 $
   Ensured files are in Unix format, with the exception of the README type
   information and Makefile.PL
 
-=head2 Changes in DBD::ODBC 1.04 January 24, 2003
+1.04 2003-01-24
 
   It seems that case insensitive string comparison with a limit causes
   problems for multiple platforms.  strncmpi, strncasecmp, _strcmpin are
@@ -2141,12 +2548,12 @@ $Revision: 10667 $
   to upper case the string then do strncmp, which should be safe...sheesh.
   A simple thing turned into a headache...
 
-=head2 Changes in DBD::ODBC 1.03 January 17, 2003
+1.03 2003-01-17
 
   Add automatic detection of DRIVER= or DSN= to add user id and password
   to connect string.
 
-=head2 Changes in DBD::ODBC 1.02 January 6, 2003
+1.02 2003-01-06
 
   Fix to call finish() automatically if execute is re-called in a loop
   (and test in t/02simple.t to ensure it's fixed)
@@ -2156,11 +2563,11 @@ $Revision: 10667 $
 
   Fixes for build under Win32 with Perl5.8.
 
-=head2 Changes in DBD::ODBC 1.01 December 9, 2002
+1.01 2002-12-09
 
   Forgot to fix require DBI 1.201 in ODBC.pm to work for perl 5.8.  Fixed
 
-=head2 Changes in DBD::ODBC 1.00 December 8, 2002
+1.00 2002-12-08
 
   (Please see all changes since version 0.43)
 
@@ -2197,24 +2604,24 @@ $Revision: 10667 $
   on systems which already have ODBC drivers in their standard include
   path.
 
-=head2 Changes in DBD::ODBC 0.45_18 September 26, 2002
+0.45_18 2002-09-26
 
   Updated MANIFEST to include more of the mytest/* files (examples, tests)
 
   Fixed problem when attempting to get NUM_OF_FIELDS after execute returns
   no rows/columns.
 
-=head2 Changes in DBD::ODBC 0.45_17 August 26, 2002
+0.45_17 2002-08-26
 
   More fixes for multiple result sets.  Needed to clear the DBIc_FIELDS_AV
   when re-executing the multiple-result set stored procedure/query.
 
-=head2 Changes in DBD::ODBC 0.45_16 August 26, 2002
+0.45_16 2002-08-26
 
   Updated to fix output parameters with multiple result sets.  The output
   parameters are not set until the last result set has been retrieved.
 
-=head2 Changes in DBD::ODBC 0.45_15 August 20, 2002
+0.45_15 2002-08-20
 
   Updated for new DBIc_STATE macros (all debug, as it turned out) to be
   thread safer in the long run
@@ -2237,7 +2644,7 @@ $Revision: 10667 $
   Updated the DBD::ODBC POD documentation to document DBD::ODBC private
   attributes and usage.
 
-=head2 Changes in DBD::ODBC 0.45_14 August 13, 2002
+0.45_14 2002-08-13
 
   Added support to handle (better) DBI begin_work().
 
@@ -2246,7 +2653,7 @@ $Revision: 10667 $
   Fix bug when connecting twice in the same script.  Trying to set the
   environment ODBC version twice against the same henv caused an error.
 
-=head2 Changes in DBD::ODBC 0.45_13 August 9, 2002
+0.45_13 2002-08-09
 
   Workaround problem with iODBC where SQLAllocHandleStd is not present in
   iODBC.
@@ -2255,11 +2662,11 @@ $Revision: 10667 $
   near future the change log will be removed from here and put in changes
   to tidy up a bit.
 
-=head2 Changes in DBD::ODBC 0.45_12 August 9, 2002
+0.45_12 2002-08-09
 
   Fixed global destruction access violation (which was seemingly random).
 
-=head2 Changes in DBD::ODBC 0.45_11 August 8, 2002
+0.45_11 2002-08-08
 
   Updated manifest to include more samples.
 
@@ -2275,7 +2682,7 @@ $Revision: 10667 $
   upgrade your driver to the latest version on Microsoft's website (MDAC
   2.7 or above) http://www.microsoft.com/data
 
-=head2 Changes in DBD::ODBC 0.45_10 July 30, 2002
+0.45_10 2002-07-30
 
   Added database specific tests to ensure things are working.  Some of the
   tests may not work for all people or may not be desirable.  I have tried
@@ -2286,12 +2693,12 @@ $Revision: 10667 $
   SQL_API_ODBC3_ALL_FUNCTIONS.  Would have caused a memory overwrite on
   the stack if it was called.
 
-=head2 Changes in DBD::ODBC 0.45_9 July 30, 2002
+0.45_9 2002-07-30
 
   Fixed bug in procedure handling for SQLServer.  Was not re-describing
   the result sets if the SQLMoreResults in the execute needs to be called.
 
-=head2 Changes in DBD::ODBC 0.45_8 July 25, 2002
+0.45_8 2002-07-25
 
   Fixed bug in tracing code when binding an undef parameter which did not
   happen to have a valid buffer with tracing level >= 2
@@ -2307,7 +2714,7 @@ $Revision: 10667 $
   Fixed SQL Server issue when binding a null and the length was set to 0
   instead of 1
 
-=head2 Changes in DBD::ODBC 0.45_7 July 25, 2002
+0.45_7 2002-07-25
 
   Adding support for array binding, but not finished.
 
@@ -2318,11 +2725,11 @@ $Revision: 10667 $
   Fixed bug where binding the empty string would cuase a problem.  Fixed
   and added test in t/07bind.t.
 
-=head2 Changes in DBD::ODBC 0.45_6 July 24, 2002
+0.45_6 2002-07-24
 
   Added support for new DBI ParamValues feature.
 
-=head2 Changes in DBD::ODBC 0.45_5 July 23, 2002
+0.45_5 2002-07-23
 
   Added odbc_err_handler and odbc_async_exec thanks to patches by David
   L. Good.  See example in mytest/testerrhandler.pl
@@ -2355,11 +2762,11 @@ $Revision: 10667 $
    check it's value.  If the value is 1, your ODBC driver can do
    asynchronous execution.  If the value is 0, your ODBC driver cannot.
 
-=head2 Changes in DBD::ODBC 0.45_4 July 22, 2002
+0.45_4 2002-07-22
 
   More fixes for DB2 tests and timestamp handling.
 
-=head2 Changes in DBD::ODBC 0.45_3 July 22, 2002
+0.45_3 2002-07-22
 
   Changes to internal timestamp type handling and test structure to ensure
   tests work for all platforms.  DB2 was giving me fits due to bad
@@ -2367,12 +2774,12 @@ $Revision: 10667 $
   problems and helping research solutions.  This includes the
   scale/precision values to correctly store full timestamps.
 
-=head2 Changes in DBD::ODBC 0.45_2 July 19, 2002
+0.45_2 2002-07-19
 
   Moving API usage to ODBC 3.0 specifications.  With lots of help from
   Martin Evans (again!).  Thanks Martin!!!!!
 
-=head2 Changes in DBD::ODBC 0.44 July 18, 2002
+0.44 2002-07-18
 
   .44 was never officially released.
 
@@ -2381,7 +2788,7 @@ $Revision: 10667 $
 
   Partly moving towards defaulting to ODBC 3.x standards.
 
-=head2 Changes in DBD::ODBC 0.43 July 18, 2002
+0.43 2002-07-18
 
   Fix for FoxPro (and potentially other) Drivers!!!!!
 
@@ -2391,14 +2798,14 @@ $Revision: 10667 $
 
   Fix to make all bound columns word (int) aligned in the buffer.
 
-=head2 Changes in DBD::ODBC 0.42 July 8, 2002
+0.42 2002-07-08
 
   Added patches to the tests to support ActiveState's automated build
   process.
 
   Fix ping() to try SQLTables for a test, instead of a strange query.
 
-=head2 Changes in DBD::ODBC 0.41 April 15, 2002
+0.41 2002-04-15
 
   Fixed problem where SQLDescribeParam would fail (probably bug in ODBC
   driver).  Now reverts to SQL_VARCHAR if that happens, instead of failing
@@ -2408,7 +2815,7 @@ $Revision: 10667 $
   problem.  Left the error on the test, but added warning indicating it's
   a known problem.
 
-=head2 Changes in DBD::ODBC 0.40 April 12, 2002
+0.40 2002-04-12
 
   Most significant change is the change in the default binding type which
   forces DBD::ODBC to attempt to determine the bind type if one is not
@@ -2422,7 +2829,7 @@ $Revision: 10667 $
   this, but if someone has the problem, please let me know (and hopefully
   send a patch with it).
 
-=head2 Changes in DBD::ODBC 0.39 March 12, 2002
+0.39 2002-03-12
 
   See mytest/longbin.pl for demonstration of inserting and retrieving long
   binary files to/from the db.  Uses MD5 algorithm to verify data.  Please
@@ -2440,11 +2847,11 @@ $Revision: 10667 $
   Changes to connect sequence to provide better error messages for those
   using DSN-less connections.
 
-=head2 Changes in DBD::ODBC 0.38 February 12, 2002
+0.38 2002-02-12
 
   Fixed do function (again) thanks to work by Martin Evans.
 
-=head2 Changes in DBD::ODBC 0.37 February 10, 2002
+0.37 2002-02-10
 
   Patches for get_info where return type is string.  Patches thanks to
   Steffen Goldner.  Thanks Steffen!
@@ -2460,12 +2867,12 @@ $Revision: 10667 $
   Additionally, a random core dump occurred in the tests, based upon the
   new SQLExecDirect code.  This has been fixed.
 
-=head2 Changes in DBD::ODBC 0.36 February 10, 2002
+0.36 2002-02-10
 
   Fixed build for ODBC 2.x drivers.  The new SQLExecDirect code had
   SQLFreeHandle which is a 3.x function, not a 2.x function.
 
-=head2 Changes in DBD::ODBC 0.35 February 9, 2002
+0.35 2002-02-09
 
   Fixed (finally) multiple result sets with differing numbers of columns.
   The final fix was to call SQLFreeStmt(SQL_UNBIND) before repreparing the
@@ -2482,7 +2889,7 @@ $Revision: 10667 $
   ensure SQLExecDirect is being called.  Patches thanks to Merijn Broeren.
   Thanks Merijn!
 
-=head2 Changes in DBD::ODBC 0.34 February 7, 2002
+0.34 2002-02-07
 
   Further revamped tests to attempt to determine if SQLDescribeParam will
   work to handle the binding types.  The t/08bind.t attempts to determine
@@ -2498,13 +2905,13 @@ $Revision: 10667 $
 
   Support for upcoming dbi get_info.
 
-=head2 Changes in DBD::ODBC 0.33_3 February 4, 2002
+0.33_3 2002-02-04
 
   Revamped tests to include tests for multiple result sets.  The tests are
   ODBC driver platform specific and will be skipped for drivers which do
   not support multiple result sets.
 
-=head2 Changes in DBD::ODBC 0.33_2 February 4, 2002
+0.33_2 2002-02-04
 
   Finally tested new binding techniques with SQL Server 2000, but there is
   a nice little bug in their MDAC and ODBC drivers according to the
@@ -2525,7 +2932,7 @@ $Revision: 10667 $
 
    Please comment soon...
 
-=head2 Changes in DBD::ODBC 0.33_1 February 4, 2002
+0.33_1 2002-02-04
 
   *** WARNING: ***
 
@@ -2553,14 +2960,14 @@ $Revision: 10667 $
      '01-JAN-1987 00:00:00'
      'Does anyone insert a ?'
 
-=head2 Changes in DBD::ODBC 0.32 January 22, 2002
+0.32 2002-01-22
 
   More SAP patches to Makfile.PL to eliminate the call to Data Sources
 
   A patch to the test (for SAP and potentially others), to allow fallback
   to SQL_TYPE_DATE in the tests
 
-=head2 Changes in DBD::ODBC 0.31 January 18, 2002
+0.31 2002-01-18
 
   Added SAP patches to build directly against SAP driver instead of driver
   manager thanks to Flemming Frandsen (thanks!)
@@ -2569,7 +2976,7 @@ $Revision: 10667 $
   please report this as soon as possible.  The downside is that we need to
   actually execute the dummy query.
 
-=head2 Changes in DBD::ODBC 0.30 January 8, 2002
+0.30 2002-01-08
 
   Added ping patch for Solid courtesy of Marko Asplund
 
@@ -2593,7 +3000,7 @@ $Revision: 10667 $
             # ignores :foo, :new, etc, but not :1 or ?
    $dbh->do("create or replace etc :new.D = sysdate etc");
 
-=head2 Changes in DBD::ODBC 0.29 August 22, 2001
+0.29 2001-08-22
 
   Cygwin patches from Neil Lunn (untested by me).  Thanks Neil!
 
@@ -2662,7 +3069,7 @@ $Revision: 10667 $
 
   Updated t/02simple.t to not print an error, when there is not one.
 
-=head2 Changes in DBD::ODBC 0.28 March 23, 2000
+0.28 2000-03-23
 
   Added support for SQLSpecialColumns thanks to patch provided by Martin
   J. Evans
@@ -2670,7 +3077,7 @@ $Revision: 10667 $
   Fixed bug introduced in 0.26 which was introduced of SQLMoreResults was
   not supported by the driver.
 
-=head2 Changes in DBD::ODBC 0.27 March 8, 2000
+0.27 2000-03-08
 
   Examined patch for ping method to repair problem reported by Chris
   Bezil.  Thanks Chris!
@@ -2678,7 +3085,7 @@ $Revision: 10667 $
   Added simple test for ping method working which should identify this in
   the future.
 
-=head2 Changes in DBD::ODBC 0.26 March 5, 2000
+0.26 2000-03-05
 
   Put in patch for returning only positive rowcounts from dbd_st_execute.
   The original patch was submitted by Jon Smirl and put back in by David
@@ -2697,7 +3104,7 @@ $Revision: 10667 $
   sample for this yet.  It may come in handy with threaded perl, someday
   or it may work in a signal handler.
 
-=head2 Changes in DBD::ODBC 0.25 March 4, 2000
+0.25 2000-03-04
 
   Added conditional compilation for SQL_WVARCHAR and SQL_WLONGVARCHAR.  If
   they are not defined by your driver manager, they will not be compiled
@@ -2708,7 +3115,7 @@ $Revision: 10667 $
   Added more long tests with binding in t\09bind.t.  Note use of
   bind_param!
 
-=head2 Changes in DBD::ODBC 0.24 February 24, 2000
+0.24 2000-02-24
 
   Fixed Test #13 in 02simple.t.  Would fail, improperly, if there was only
   one data source defined.
@@ -2731,14 +3138,14 @@ $Revision: 10667 $
   Added some code for handling a hint on disconnect where the user gets an
   error for not committing.
 
-=head2 Changes in DBD::ODBC 0.22 September 8, 1999
+0.22 1999-09-08
 
   Fixed for threaded perl builds.  Note that this was tested only on
   Win32, with no threads in use and using DBI 1.13.  Note, for
   ActiveState/PERL_OBJECT builds, DBI 1.13_01 is required as of 9/8/99.
   If you are using ActiveState's perl, this can be installed by using PPM.
 
-=head2 Changes in DBD::ODBC 0.21
+0.21 Unknown
 
 Thanks to all who provided patches!
 
@@ -2788,23 +3195,23 @@ Thanks to all who provided patches!
   Added data_sources capability via snarfing code from DBD::Adabas (Jochen
   Wiedmann)
 
-=head2 Changes in DBD::ODBC 0.20 August 14, 1998
+0.20 1998-08-14
 
   SQLColAttributes fixes for SQL Server and MySQL. Fixed tables method by
   renaming to new table_info method. Added new tyoe_info_all method.
   Improved Makefile.PL support for Adabase.
 
-=head2 Changes in DBD::ODBC 0.19
+0.19 Unknown
 
   Added iODBC source code to distribution.Fall-back to using iODBC header
   files in some cases.
 
-=head2 Changes in DBD::ODBC 0.18
+0.18 Unknown
 
   Enhancements to build process. Better handling of errors in error
   handling code.
 
-=head2 Changes in DBD::ODBC 0.17
+0.17 Unknown
 
   This release is mostly due to the good work of Jeff Urlwin.  My eternal
   thanks to you Jeff.
@@ -2868,5 +3275,3 @@ Thanks to all who provided patches!
   for the SQL Name.  Again, in Oracle the SQL_LONGVARCHAR is LONG, while
   in Access it's MEMO.  The tests currently handle this correctly (at
   least with Access and Oracle, MS SQL server will be tested also).
-
-=cut

@@ -5,7 +5,7 @@ package HTML::Element;
 use strict;
 use warnings;
 
-our $VERSION = '5.03'; # VERSION from OurPkgVersion
+our $VERSION = '5.07'; # VERSION from OurPkgVersion
 
 use Carp           ();
 use HTML::Entities ();
@@ -1391,7 +1391,7 @@ sub starttag_XML {
             $name = $self->{'text'};
         }
         $name =~ s/--/-&#45;/g;    # can't have double --'s in XML comments
-        return "<!-- $name -->";
+        return "<!--$name-->";
     }
 
     my $tag = "<$name";
@@ -1663,20 +1663,22 @@ sub is_inside {
     return 0 unless @_; # if no items specified, I guess this is right.
 
     my $current = $self;
-
     # the loop starts by looking at the given element
-    while ( defined $current and ref $current ) {
-        for (@_) {
-            if (ref) {    # element
-                return 1 if $_ eq $current;
-            }
-            else {        # tag name
-                return 1 if $_ eq $current->{'_tag'};
-            }
+
+    if (scalar @_ == 1) {
+        while ( defined $current and ref $current ) {
+            return 1 if $current eq $_[0] || $current->{'_tag'} eq $_[0];
+            $current = $current->{'_parent'};
         }
-        $current = $current->{'_parent'};
+        return 0;
+    } else {
+        my %elements = map { $_ => 1 } @_;
+        while ( defined $current and ref $current ) {
+            return 1 if $elements{$current} || $elements{ $current->{'_tag'} };
+            $current = $current->{'_parent'};
+        }
     }
-    0;
+    return 0;
 }
 
 
@@ -2798,8 +2800,8 @@ HTML::Element - Class for objects that represent HTML elements
 
 =head1 VERSION
 
-This document describes version 5.03 of
-HTML::Element, released September 22, 2012
+This document describes version 5.07 of
+HTML::Element, released August 31, 2017
 as part of L<HTML-Tree|HTML::Tree>.
 
 =head1 SYNOPSIS
@@ -4466,7 +4468,7 @@ Former maintainers:
 =back
 
 You can follow or contribute to HTML-Tree's development at
-L<< http://github.com/madsen/HTML-Tree >>.
+L<< https://github.com/kentfredric/HTML-Tree >>.
 
 =head1 COPYRIGHT AND LICENSE
 

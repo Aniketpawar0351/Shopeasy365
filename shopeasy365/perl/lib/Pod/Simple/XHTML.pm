@@ -38,14 +38,14 @@ you can prevent high-bit characters from being encoded as HTML entities and
 declare the output character set as UTF-8 before parsing, like so:
 
   $psx->html_charset('UTF-8');
-  $psx->html_encode_chars('&<>">');
+  $psx->html_encode_chars(q{&<>'"});
 
 =cut
 
 package Pod::Simple::XHTML;
 use strict;
 use vars qw( $VERSION @ISA $HAS_HTML_ENTITIES );
-$VERSION = '3.26';
+$VERSION = '3.42';
 use Pod::Simple::Methody ();
 @ISA = ('Pod::Simple::Methody');
 
@@ -92,7 +92,7 @@ the call to C<parse_file>:
 
 In turning L<Foo::Bar> into http://whatever/Foo%3a%3aBar, what
 to put before the "Foo%3a%3aBar". The default value is
-"http://search.cpan.org/perldoc?".
+"https://metacpan.org/pod/".
 
 =head2 perldoc_url_postfix
 
@@ -132,7 +132,7 @@ A document type tag for the file. This option is not set by default.
 
 =head2 html_charset
 
-The charater set to declare in the Content-Type meta tag created by default
+The character set to declare in the Content-Type meta tag created by default
 for C<html_header_tags>. Note that this option will be ignored if the value of
 C<html_header_tags> is changed. Defaults to "ISO-8859-1".
 
@@ -247,7 +247,7 @@ sub new {
   my $self = shift;
   my $new = $self->SUPER::new(@_);
   $new->{'output_fh'} ||= *STDOUT{IO};
-  $new->perldoc_url_prefix('http://search.cpan.org/perldoc?');
+  $new->perldoc_url_prefix('https://metacpan.org/pod/');
   $new->man_url_prefix('http://man.he.net/man');
   $new->html_charset('ISO-8859-1');
   $new->nix_X_codes(1);
@@ -313,9 +313,9 @@ The base implementation just escapes the text.
 
 The callback methods C<start_code> and C<end_code> emits the C<code> tags
 before and after C<handle_code> is invoked, so you might want to override these
-together with C<handle_code> if this wrapping isn't suiteable.
+together with C<handle_code> if this wrapping isn't suitable.
 
-Note that the code might be broken into mulitple segments if there are
+Note that the code might be broken into multiple segments if there are
 nested formatting codes inside a C<< CE<lt>...> >> sequence.  In between the
 calls to C<handle_code> other markup tags might have been emitted in that
 case.  The same is true for verbatim sections if the C<codes_in_verbatim>
@@ -352,7 +352,23 @@ sub handle_text {
         # literal xhtml region, since handle_code calls encode_entities.
         $_[0]->handle_code( $_[1], $_[0]{'in_code'}[-1] );
     } else {
-        $_[0]{'scratch'} .= $text;
+        if ($_[0]->{in_for}) {
+            my $newlines = $_[0]->__in_literal_xhtml_region ? "\n\n" : '';
+            if ($_[0]->{started_for}) {
+                if ($text =~ /\S/) {
+                    delete $_[0]->{started_for};
+                    $_[0]{'scratch'} .= $text . $newlines;
+                }
+                # Otherwise, append nothing until we have something to append.
+            } else {
+                # The parser sometimes preserves newlines and sometimes doesn't!
+                $text =~ s/\n\z//;
+                $_[0]{'scratch'} .= $text . $newlines;
+            }
+        } else {
+            # Just plain text.
+            $_[0]{'scratch'} .= $text;
+        }
     }
 
     $_[0]{htext} .= $text if $_[0]{'in_head'};
@@ -371,7 +387,7 @@ sub handle_code {
 }
 
 sub start_Para {
-    $_[0]{'scratch'} = '<p>';
+    $_[0]{'scratch'} .= '<p>';
 }
 
 sub start_Verbatim {
@@ -384,6 +400,8 @@ sub start_head1 {  $_[0]{'in_head'} = 1; $_[0]{htext} = ''; }
 sub start_head2 {  $_[0]{'in_head'} = 2; $_[0]{htext} = ''; }
 sub start_head3 {  $_[0]{'in_head'} = 3; $_[0]{htext} = ''; }
 sub start_head4 {  $_[0]{'in_head'} = 4; $_[0]{htext} = ''; }
+sub start_head5 {  $_[0]{'in_head'} = 5; $_[0]{htext} = ''; }
+sub start_head6 {  $_[0]{'in_head'} = 6; $_[0]{htext} = ''; }
 
 sub start_item_number {
     $_[0]{'scratch'} = "</li>\n" if ($_[0]{'in_li'}->[-1] && pop @{$_[0]{'in_li'}});
@@ -467,6 +485,8 @@ sub end_head1       { shift->_end_head(@_); }
 sub end_head2       { shift->_end_head(@_); }
 sub end_head3       { shift->_end_head(@_); }
 sub end_head4       { shift->_end_head(@_); }
+sub end_head5       { shift->_end_head(@_); }
+sub end_head6       { shift->_end_head(@_); }
 
 sub end_item_bullet { $_[0]{'scratch'} .= '</p>'; $_[0]->emit }
 sub end_item_number { $_[0]{'scratch'} .= '</p>'; $_[0]->emit }
@@ -496,20 +516,27 @@ sub start_for {
   my ($self, $flags) = @_;
 
   push @{ $self->{__region_targets} }, $flags->{target_matching};
+  $self->{started_for} = 1;
+  $self->{in_for} = 1;
 
   unless ($self->__in_literal_xhtml_region) {
     $self->{scratch} .= '<div';
     $self->{scratch} .= qq( class="$flags->{target}") if $flags->{target};
-    $self->{scratch} .= '>';
+    $self->{scratch} .= ">\n\n";
   }
-
-  $self->emit;
-
 }
+
 sub end_for {
   my ($self) = @_;
+  delete $self->{started_for};
+  delete $self->{in_for};
 
-  $self->{'scratch'} .= '</div>' unless $self->__in_literal_xhtml_region;
+  if ($self->__in_literal_xhtml_region) {
+    # Remove trailine newlines.
+    $self->{'scratch'} =~ s/\s+\z//s;
+  } else {
+    $self->{'scratch'} .= '</div>';
+  }
 
   pop @{ $self->{__region_targets} };
   $self->emit;
@@ -526,16 +553,17 @@ sub start_Document {
     $title = $self->force_title || $self->title || $self->default_title || '';
     $metatags = $self->html_header_tags || '';
     if (my $css = $self->html_css) {
-        $metatags .= $css;
         if ($css !~ /<link/) {
             # this is required to be compatible with Pod::Simple::BatchHTML
             $metatags .= '<link rel="stylesheet" href="'
                 . $self->encode_entities($css) . '" type="text/css" />';
+        } else {
+            $metatags .= $css;
         }
     }
     if ($self->html_javascript) {
       $metatags .= qq{\n<script type="text/javascript" src="} .
-                    $self->html_javascript . "'></script>";
+                    $self->html_javascript . '"></script>';
     }
     $bodyid = $self->backlink ? ' id="_podtop_"' : '';
     $self->{'scratch'} .= <<"HTML";
@@ -661,8 +689,8 @@ sub emit {
 Resolves a POD link target (typically a module or POD file name) and section
 name to a URL. The resulting link will be returned for the above examples as:
 
-  http://search.cpan.org/perldoc?Net::Ping#INSTALL
-  http://search.cpan.org/perldoc?perlpodspec
+  https://metacpan.org/pod/Net::Ping#INSTALL
+  https://metacpan.org/pod/perlpodspec
   #SYNOPSIS
 
 Note that when there is only a section argument the URL will simply be a link
@@ -808,8 +836,8 @@ pod-people@perl.org mail list. Send an empty email to
 pod-people-subscribe@perl.org to subscribe.
 
 This module is managed in an open GitHub repository,
-L<https://github.com/theory/pod-simple/>. Feel free to fork and contribute, or
-to clone L<git://github.com/theory/pod-simple.git> and send patches!
+L<https://github.com/perl-pod/pod-simple/>. Feel free to fork and contribute, or
+to clone L<git://github.com/perl-pod/pod-simple.git> and send patches!
 
 Patches against Pod::Simple are welcome. Please send bug reports to
 <bug-pod-simple@rt.cpan.org>.

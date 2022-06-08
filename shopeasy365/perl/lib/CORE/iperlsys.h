@@ -3,9 +3,8 @@
  *
  * This file defines the system level functionality that perl needs.
  *
- * When using C, this definition is in the form of a set of macros
- * that can be #defined to the system-level function (or a wrapper
- * provided elsewhere).
+ * When using C, this definition is in the form of a set of macros that can be
+ * #defined to the system-level function (or a wrapper provided elsewhere).
  *
  * GSAR 21-JUN-98
  */
@@ -19,8 +18,8 @@
  * XXX := functional group
  * YYY := stdlib/OS function name
  *
- * Continuing with the theme of PerlIO, all OS functionality was
- * encapsulated into one of several interfaces.
+ * Continuing with the theme of PerlIO, all OS functionality was encapsulated
+ * into one of several interfaces.
  *
  * PerlIO - stdio
  * PerlLIO - low level I/O
@@ -50,11 +49,14 @@
 */
 #include "perlio.h"
 
+typedef Signal_t (*Sighandler1_t) (int);
+typedef Signal_t (*Sighandler3_t) (int, Siginfo_t*, void*);
+
 #ifndef Sighandler_t
-#  if defined(HAS_SIGACTION) && defined(SA_SIGINFO)
-typedef Signal_t (*Sighandler_t) (int, siginfo_t*, void*);
+#  ifdef PERL_USE_3ARG_SIGHANDLER
+typedef Sighandler3_t Sighandler_t;
 #  else
-typedef Signal_t (*Sighandler_t) (int);
+typedef Sighandler1_t Sighandler_t;
 #  endif
 #endif
 
@@ -63,7 +65,7 @@ typedef Signal_t (*Sighandler_t) (int);
 /* IPerlStdIO		*/
 struct IPerlStdIO;
 struct IPerlStdIOInfo;
-typedef FILE*		(*LPStdin)(struct IPerlStdIO*);
+typedef FILE*           (*LPStdin)(struct IPerlStdIO*);
 typedef FILE*		(*LPStdout)(struct IPerlStdIO*);
 typedef FILE*		(*LPStderr)(struct IPerlStdIO*);
 typedef FILE*		(*LPOpen)(struct IPerlStdIO*, const char*,
@@ -315,10 +317,12 @@ struct IPerlStdIOInfo
 #define PerlSIO_fputs(s,f)		fputs(s,f)
 #define PerlSIO_fflush(f)		Fflush(f)
 #define PerlSIO_fgets(s, n, f)		fgets(s,n,f)
-#if defined(VMS) && defined(__DECC)
+#if defined(__VMS)
      /* Unusual definition of ungetc() here to accommodate fast_sv_gets()'
       * belief that it can mix getc/ungetc with reads from stdio buffer */
+START_EXTERN_C
      int decc$ungetc(int __c, FILE *__stream);
+END_EXTERN_C
 #    define PerlSIO_ungetc(c,f) ((c) == EOF ? EOF : \
             ((*(f) && !((*(f))->_flag & _IONBF) && \
             ((*(f))->_ptr > (*(f))->_base)) ? \
@@ -476,7 +480,7 @@ typedef char*		(*LPENVGetenv_len)(struct IPerlEnv*,
 #endif
 #ifdef WIN32
 typedef unsigned long	(*LPEnvOsID)(struct IPerlEnv*);
-typedef char*		(*LPEnvLibPath)(struct IPerlEnv*, const char*,
+typedef char*		(*LPEnvLibPath)(struct IPerlEnv*, WIN32_NO_REGISTRY_M_(const char*)
 					STRLEN *const len);
 typedef char*		(*LPEnvSiteLibPath)(struct IPerlEnv*, const char*,
 					    STRLEN *const len);
@@ -548,7 +552,7 @@ struct IPerlEnvInfo
 #define PerlEnv_os_id()						\
 	(*PL_Env->pEnvOsID)(PL_Env)
 #define PerlEnv_lib_path(str, lenp)				\
-	(*PL_Env->pLibPath)(PL_Env,(str),(lenp))
+	(*PL_Env->pLibPath)(PL_Env,WIN32_NO_REGISTRY_M_(str)(lenp))
 #define PerlEnv_sitelib_path(str, lenp)				\
 	(*PL_Env->pSiteLibPath)(PL_Env,(str),(lenp))
 #define PerlEnv_vendorlib_path(str, lenp)			\
@@ -557,10 +561,18 @@ struct IPerlEnvInfo
 	(*PL_Env->pGetChildIO)(PL_Env, ptr)
 #endif
 
-#else	/* PERL_IMPLICIT_SYS */
+#else	/* below is ! PERL_IMPLICIT_SYS */
+#  ifdef USE_ITHREADS
 
-#define PerlEnv_putenv(str)		putenv((str))
-#define PerlEnv_getenv(str)		getenv((str))
+     /* Use the comma operator to return 0/non-zero, while avoiding putting
+      * this in an inline function */
+#    define PerlEnv_putenv(str)	(ENV_LOCK, (putenv(str)                 \
+                                            ? (ENV_UNLOCK, 1)           \
+                                            : (ENV_UNLOCK, 0)))
+#  else
+#    define PerlEnv_putenv(str)		putenv(str)
+#  endif
+#define PerlEnv_getenv(str)		mortal_getenv(str)
 #define PerlEnv_getenv_len(str,l)	getenv_len((str), (l))
 #ifdef HAS_ENVGETENV
 #  define PerlEnv_ENVgetenv(str)	ENVgetenv((str))
@@ -573,7 +585,7 @@ struct IPerlEnvInfo
 
 #ifdef WIN32
 #define PerlEnv_os_id()			win32_os_id()
-#define PerlEnv_lib_path(str, lenp)	win32_get_privlib(str, lenp)
+#define PerlEnv_lib_path(str, lenp)	win32_get_privlib(WIN32_NO_REGISTRY_M_(str) lenp)
 #define PerlEnv_sitelib_path(str, lenp)	win32_get_sitelib(str, lenp)
 #define PerlEnv_vendorlib_path(str, lenp)	win32_get_vendorlib(str, lenp)
 #define PerlEnv_get_child_IO(ptr)	win32_get_child_IO(ptr)
@@ -583,7 +595,9 @@ struct IPerlEnvInfo
 #define PerlEnv_get_childdir()		win32_get_childdir()
 #define PerlEnv_free_childdir(d)	win32_free_childdir((d))
 #else
-#define PerlEnv_clearenv()		clearenv()
+#define PerlEnv_clearenv(str)	        (ENV_LOCK, (clearenv(str)           \
+                                                    ? (ENV_UNLOCK, 1)       \
+                                                    : (ENV_UNLOCK, 0)))
 #define PerlEnv_get_childenv()		get_childenv()
 #define PerlEnv_free_childenv(e)	free_childenv((e))
 #define PerlEnv_get_childdir()		get_childdir()
@@ -597,6 +611,8 @@ struct IPerlEnvInfo
 */
 
 #if defined(PERL_IMPLICIT_SYS)
+
+struct utimbuf; /* prevent gcc warning about the use below */
 
 /* IPerlLIO		*/
 struct IPerlLIO;
@@ -756,7 +772,6 @@ struct IPerlLIOInfo
 #  define PerlLIO_lstat(name, buf)	PerlLIO_stat((name), (buf))
 #endif
 #define PerlLIO_mktemp(file)		mktemp((file))
-#define PerlLIO_mkstemp(file)		mkstemp((file))
 #define PerlLIO_open(file, flag)	open((file), (flag))
 #define PerlLIO_open3(file, flag, perm)	open((file), (flag), (perm))
 #define PerlLIO_read(fd, buf, count)	read((fd), (buf), (count))
@@ -933,10 +948,10 @@ typedef int		(*LPProcExecv)(struct IPerlProc*, const char*,
 			    const char*const*);
 typedef int		(*LPProcExecvp)(struct IPerlProc*, const char*,
 			    const char*const*);
-typedef uid_t		(*LPProcGetuid)(struct IPerlProc*);
-typedef uid_t		(*LPProcGeteuid)(struct IPerlProc*);
-typedef gid_t		(*LPProcGetgid)(struct IPerlProc*);
-typedef gid_t		(*LPProcGetegid)(struct IPerlProc*);
+typedef Uid_t		(*LPProcGetuid)(struct IPerlProc*);
+typedef Uid_t		(*LPProcGeteuid)(struct IPerlProc*);
+typedef Gid_t		(*LPProcGetgid)(struct IPerlProc*);
+typedef Gid_t		(*LPProcGetegid)(struct IPerlProc*);
 typedef char*		(*LPProcGetlogin)(struct IPerlProc*);
 typedef int		(*LPProcKill)(struct IPerlProc*, int, int);
 typedef int		(*LPProcKillpg)(struct IPerlProc*, int, int);
@@ -1413,11 +1428,5 @@ struct IPerlSockInfo
 #endif	/* __Inc__IPerl___ */
 
 /*
- * Local variables:
- * c-indentation-style: bsd
- * c-basic-offset: 4
- * indent-tabs-mode: t
- * End:
- *
- * ex: set ts=8 sts=4 sw=4 noet:
+ * ex: set ts=8 sts=4 sw=4 et:
  */

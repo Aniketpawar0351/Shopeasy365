@@ -1,13 +1,9 @@
 package Package::Stash::PP;
-BEGIN {
-  $Package::Stash::PP::AUTHORITY = 'cpan:DOY';
-}
-{
-  $Package::Stash::PP::VERSION = '0.34';
-}
 use strict;
 use warnings;
-# ABSTRACT: pure perl implementation of the Package::Stash API
+# ABSTRACT: Pure perl implementation of the Package::Stash API
+
+our $VERSION = '0.39';
 
 use B;
 use Carp qw(confess);
@@ -28,6 +24,15 @@ use constant BROKEN_GLOB_ASSIGNMENT => ($] < 5.013004);
 # pre-5.10, ->isa lookups were cached in the ::ISA::CACHE:: slot
 use constant HAS_ISA_CACHE => ($] < 5.010);
 
+#pod =head1 SYNOPSIS
+#pod
+#pod   use Package::Stash;
+#pod
+#pod =head1 DESCRIPTION
+#pod
+#pod This is a backend for L<Package::Stash> implemented in pure perl, for those without a compiler or who would like to use this inline in scripts.
+#pod
+#pod =cut
 
 sub new {
     my $class = shift;
@@ -87,10 +92,6 @@ sub namespace {
     }
 }
 
-sub _is_anon {
-    return !defined $_[0]->{package};
-}
-
 {
     my %SIGIL_MAP = (
         '$' => 'SCALAR',
@@ -101,7 +102,7 @@ sub _is_anon {
     );
 
     sub _deconstruct_variable_name {
-        my ($self, $variable) = @_;
+        my ($variable) = @_;
 
         my @ret;
         if (ref($variable) eq 'HASH') {
@@ -132,7 +133,6 @@ sub _is_anon {
 }
 
 sub _valid_for_type {
-    my $self = shift;
     my ($value, $type) = @_;
     if ($type eq 'HASH' || $type eq 'ARRAY'
      || $type eq 'IO'   || $type eq 'CODE') {
@@ -147,10 +147,10 @@ sub _valid_for_type {
 sub add_symbol {
     my ($self, $variable, $initial_value, %opts) = @_;
 
-    my ($name, $sigil, $type) = $self->_deconstruct_variable_name($variable);
+    my ($name, $sigil, $type) = _deconstruct_variable_name($variable);
 
     if (@_ > 2) {
-        $self->_valid_for_type($initial_value, $type)
+        _valid_for_type($initial_value, $type)
             || confess "$initial_value is not of type $type";
 
         # cheap fail-fast check for PERLDBf_SUBLINE and '&'
@@ -181,7 +181,7 @@ sub add_symbol {
                 *{ $self->name . '::' . $name };
             }
             else {
-                my $undef = $self->_undef_ref_for_type($type);
+                my $undef = _undef_ref_for_type($type);
                 *{ $self->name . '::' . $name } = $undef;
             }
         }
@@ -195,6 +195,7 @@ sub add_symbol {
             local *__ANON__:: = $namespace;
             no strict 'refs';
             no warnings 'void';
+            no warnings 'once';
             *{"__ANON__::$name"};
         }
 
@@ -205,13 +206,12 @@ sub add_symbol {
         }
         else {
             return if BROKEN_ISA_ASSIGNMENT && $name eq 'ISA';
-            *{ $namespace->{$name} } = $self->_undef_ref_for_type($type);
+            *{ $namespace->{$name} } = _undef_ref_for_type($type);
         }
     }
 }
 
 sub _undef_ref_for_type {
-    my $self = shift;
     my ($type) = @_;
 
     if ($type eq 'ARRAY') {
@@ -242,7 +242,7 @@ sub remove_glob {
 sub has_symbol {
     my ($self, $variable) = @_;
 
-    my ($name, $sigil, $type) = $self->_deconstruct_variable_name($variable);
+    my ($name, $sigil, $type) = _deconstruct_variable_name($variable);
 
     my $namespace = $self->namespace;
 
@@ -275,7 +275,7 @@ sub has_symbol {
 sub get_symbol {
     my ($self, $variable, %opts) = @_;
 
-    my ($name, $sigil, $type) = $self->_deconstruct_variable_name($variable);
+    my ($name, $sigil, $type) = _deconstruct_variable_name($variable);
 
     my $namespace = $self->namespace;
 
@@ -295,7 +295,7 @@ sub get_symbol {
     }
     else {
         if ($type eq 'CODE') {
-            if (BROKEN_GLOB_ASSIGNMENT || !$self->_is_anon) {
+            if (BROKEN_GLOB_ASSIGNMENT || defined($self->{package})) {
                 no strict 'refs';
                 return \&{ $self->name . '::' . $name };
             }
@@ -329,7 +329,7 @@ sub get_or_add_symbol {
 sub remove_symbol {
     my ($self, $variable) = @_;
 
-    my ($name, $sigil, $type) = $self->_deconstruct_variable_name($variable);
+    my ($name, $sigil, $type) = _deconstruct_variable_name($variable);
 
     # FIXME:
     # no doubt this is grossly inefficient and
@@ -416,20 +416,19 @@ sub get_all_symbols {
     }
 }
 
-
-1;
-
 __END__
 
 =pod
 
+=encoding UTF-8
+
 =head1 NAME
 
-Package::Stash::PP - pure perl implementation of the Package::Stash API
+Package::Stash::PP - Pure perl implementation of the Package::Stash API
 
 =head1 VERSION
 
-version 0.34
+version 0.39
 
 =head1 SYNOPSIS
 
@@ -439,7 +438,7 @@ version 0.34
 
 This is a backend for L<Package::Stash> implemented in pure perl, for those without a compiler or who would like to use this inline in scripts.
 
-=head1 BUGS
+=for stopwords TODO
 
 =over 4
 
@@ -460,10 +459,6 @@ core perl bugs, it's hard to tell.
 
 =back
 
-Please report any bugs through RT: email
-C<bug-package-stash at rt.cpan.org>, or browse to
-L<http://rt.cpan.org/NoAuth/ReportBug.html?Queue=Package-Stash>.
-
 =head1 SEE ALSO
 
 =over 4
@@ -473,41 +468,6 @@ L<http://rt.cpan.org/NoAuth/ReportBug.html?Queue=Package-Stash>.
 This module is a factoring out of code that used to live here
 
 =back
-
-=head1 SUPPORT
-
-You can find this documentation for this module with the perldoc command.
-
-    perldoc Package::Stash
-
-You can also look for information at:
-
-=over 4
-
-=item * AnnoCPAN: Annotated CPAN documentation
-
-L<http://annocpan.org/dist/Package-Stash>
-
-=item * CPAN Ratings
-
-L<http://cpanratings.perl.org/d/Package-Stash>
-
-=item * RT: CPAN's request tracker
-
-L<http://rt.cpan.org/NoAuth/Bugs.html?Dist=Package-Stash>
-
-=item * Search CPAN
-
-L<http://search.cpan.org/dist/Package-Stash>
-
-=back
-
-=head1 AUTHOR
-
-Jesse Luehrs <doy at tozt dot net>
-
-Mostly copied from code from L<Class::MOP::Package>, by Stevan Little and the
-Moose Cabal.
 
 =for Pod::Coverage BROKEN_ISA_ASSIGNMENT
 add_symbol
@@ -521,13 +481,19 @@ namespace
 new
 remove_glob
 
+=head1 BUGS
+
+Bugs may be submitted through L<the RT bug tracker|https://rt.cpan.org/Public/Dist/Display.html?Name=Package-Stash>
+(or L<bug-Package-Stash@rt.cpan.org|mailto:bug-Package-Stash@rt.cpan.org>).
+
 =head1 AUTHOR
 
-Jesse Luehrs <doy at tozt dot net>
+Mostly copied from code from L<Class::MOP::Package>, by Stevan Little and the
+Moose Cabal.
 
 =head1 COPYRIGHT AND LICENSE
 
-This software is copyright (c) 2013 by Jesse Luehrs.
+This software is copyright (c) 2020 by Jesse Luehrs.
 
 This is free software; you can redistribute it and/or modify it under
 the same terms as the Perl 5 programming language system itself.

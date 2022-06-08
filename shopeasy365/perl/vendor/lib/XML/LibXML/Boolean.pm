@@ -12,10 +12,11 @@ package XML::LibXML::Boolean;
 use XML::LibXML::Number;
 use XML::LibXML::Literal;
 use strict;
+use warnings;
 
 use vars qw ($VERSION);
 
-$VERSION = "2.0014"; # VERSION TEMPLATE: DO NOT CHANGE
+$VERSION = "2.0206"; # VERSION TEMPLATE: DO NOT CHANGE
 
 use overload
         '""' => \&value,

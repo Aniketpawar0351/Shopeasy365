@@ -53,8 +53,6 @@ background: linear-gradient(to right, #CFDEF3, #E0EAFC); /* W3C, IE 10+/ Edge, F
 if(isset($_POST['up_pass2'])){
   $new_pass=$_POST['up_pass'];
   $rnew_pass=$_POST['rup_pass'];
-  $sql=mysqli_query($con,"SELECT * from 1client_details where RPASSWORD='$new_pass'");
-  $row=mysqli_num_rows($sql);
   if($new_pass!=$rnew_pass){
     die("<script>Swal.fire({
   icon: 'warning',
@@ -62,7 +60,7 @@ if(isset($_POST['up_pass2'])){
   text: 'Password Not Match'
 })</script>");
   }
-  if(!$row>0){
+  else{
     $res1=mysqli_query($con,"UPDATE 1client_details SET RPASSWORD='$new_pass',REPEAT_PASSWORD='$new_pass' WHERE cd_id=$temp_id");
     $res=mysqli_query($con,"UPDATE 1admin set PASSWORD='$new_pass' where special_id=$temp_id ");
     if($res1&&$res){
@@ -84,13 +82,6 @@ if(isset($_POST['up_pass2'])){
     text: 'Something Went Wrong'
   })</script>";
     }
-  }
-  else{
-    echo "<script>Swal.fire({
-  icon: 'warning',
-  title: 'Oops...',
-  text: 'Password Alredy Exist'
-})</script>";
   }
 }
 ?>

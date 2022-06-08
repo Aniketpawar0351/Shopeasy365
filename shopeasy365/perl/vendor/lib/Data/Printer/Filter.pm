@@ -50,7 +50,7 @@ sub import {
     };
 
     my $newline = sub {
-        return ${$properties{_linebreak}} . (' ' x $properties{_current_indent});
+        return $properties{_linebreak} . (' ' x $properties{_current_indent});
     };
 
     my $indent = sub {
@@ -65,11 +65,15 @@ sub import {
         return;
     };
 
-    my $imported = sub (\[@$%&];%) {
+    my $imported_p = sub (\[@$%&];%) {
         my ($item, $p) = @_;
         return Data::Printer::p( $item, %properties );
     };
 
+    my $imported_np = sub (\[@$%&];%) {
+        my ($item, $p) = @_;
+        return Data::Printer::np( $item, %properties );
+    };
     {
         no strict 'refs';
         *{"$caller\::filter"}  = $filter;
@@ -77,7 +81,8 @@ sub import {
         *{"$caller\::outdent"} = $outdent;
         *{"$caller\::newline"} = $newline;
 
-        *{"$caller\::p"} = $imported;
+        *{"$caller\::np"} = $imported_np;
+        *{"$caller\::p"} = $imported_p;
 
         *{"$caller\::_filter_list"}   = $filters;
         *{"$caller\::_extra_options"} = $extras;
@@ -106,7 +111,7 @@ Create your filter module:
   filter 'SCALAR', sub {
       my ($ref, $properties) = @_;
       my $val = $$ref;
-      
+
       if ($val > 100) {
           return 'too big!!';
       }
@@ -210,6 +215,12 @@ You can use this to throw some data structures back at C<Data::Printer>
 and use the results in your own return string - like when manipulating
 hashes or arrays.
 
+=head2 np()
+
+This is the same as C<Data::Printer>'s np().  You can use this to throw some
+data structures back at C<Data::Printer> and use the results in your own return
+string - like when manipulating hashes or arrays.
+
 =head2 newline()
 
 This helper returns a string using the linebreak as specified by the
@@ -297,21 +308,22 @@ L<Data::Printer::Filter::ClassicRegex> changes the way Data::Printer
 dumps regular expressions, doing it the classic C<qr//> way that got
 popular in C<Data::Dumper>.
 
-=head2 URI
-
-L<Data::Printer::Filter::URI> pretty-prints L<URI> objects, displaying
-the URI as a string instead of dumping the object.
-
 =head2 JSON
 
-L<Data::Printer::Filter::JSON> lets you see your JSON structures
-replacing boolean objects with simple C<true/false> strings!
+L<Data::Printer::Filter::JSON>, by Nuba Princigalli, lets you see
+your JSON structures replacing boolean objects with simple C<true/false>
+strings!
 
 =head2 URIs
 
 L<Data::Printer::Filter::URI> filters through several L<URI> manipulation
 classes and displays the URI as a colored string. A very nice addition
 by Stanislaw Pusep (SYP).
+
+=head2 Perl Data Language (PDL)
+
+L<Data::Printer::Filter::PDL>, by Zakariyya Mughal, lets you quickly see
+the relevant contents of a PDL variable.
 
 =head1 USING MORE THAN ONE FILTER FOR THE SAME TYPE/CLASS
 
@@ -321,7 +333,7 @@ called in order, until one of them returns a string. This lets
 you have several filters inspecting the same given value until
 one of them decides to actually treat it somehow.
 
-If your filter catched a value and you don't want to treat it,
+If your filter caught a value and you don't want to treat it,
 simply return and the next filter will be called. If there are no
 other filters for that particular class or type available, the
 standard Data::Printer calls will be used.
@@ -361,5 +373,3 @@ Copyright 2011 Breno G. de Oliveira C<< <garu at cpan.org> >>. All rights reserv
 
 This module is free software; you can redistribute it and/or modify it
 under the same terms as Perl itself. See L<perlartistic>.
-
-

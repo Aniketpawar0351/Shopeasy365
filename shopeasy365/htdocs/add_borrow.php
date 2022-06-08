@@ -63,7 +63,7 @@ include("database.php");
    </div>
    <div class="form-group">
    <label for="bdate">Date</label>
-   <input type="datetime-local" class="form-control" id="exampleInputEmail1"  name="bdate" required>
+   <input type="date" class="form-control" id="exampleInputEmail1"  name="bdate" required>
    </div>
    <button type="submit" class="btn btn-primary" name="submit_p">Add Borrow</button>
    </form>

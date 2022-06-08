@@ -11,13 +11,13 @@ Variable::Magic - Associate user-defined magic to variables from Perl.
 
 =head1 VERSION
 
-Version 0.52
+Version 0.62
 
 =cut
 
 our $VERSION;
 BEGIN {
- $VERSION = '0.52';
+ $VERSION = '0.62';
 }
 
 =head1 SYNOPSIS
@@ -88,7 +88,7 @@ You can safely apply different kinds of magics to the same variable, and each of
 Magic is type-agnostic.
 
 The same magic can be applied on scalars, arrays, hashes, subs or globs.
-But the same hook (see below for a list) may trigger differently depending on the the type of the variable.
+But the same hook (see below for a list) may trigger differently depending on the type of the variable.
 
 =item *
 
@@ -152,7 +152,10 @@ It behaves roughly like Perl object destructors (i.e. C<DESTROY> methods), excep
 
 I<copy>
 
-This magic only applies to tied arrays and hashes, and fires when you try to access or change their elements.
+When applied to tied arrays and hashes, this magic fires when you try to access or change their elements.
+
+Starting from perl 5.17.0, it can also be applied to closure prototypes, in which case the magic will be called when the prototype is cloned.
+The L</VMG_COMPAT_CODE_COPY_CLONE> constant is true when your perl support this feature.
 
 =item *
 
@@ -269,8 +272,11 @@ The callback is expected to return the new scalar or array length to use, or C<u
 
 I<copy>
 
-C<$_[2]> is a either an alias or a copy of the current key, and C<$_[3]> is an alias to the current element (i.e. the value).
-Because C<$_[2]> might be a copy, it is useless to try to change it or cast magic on it.
+When the variable for which the magic is invoked is an array or an hash, C<$_[2]> is a either an alias or a copy of the current key, and C<$_[3]> is an alias to the current element (i.e. the value).
+Since C<$_[2]> might be a copy, it is useless to try to change it or cast magic on it.
+
+Starting from perl 5.17.0, this magic can also be called for code references.
+In this case, C<$_[2]> is always C<undef> and C<$_[3]> is a reference to the cloned anonymous subroutine.
 
 =item *
 
@@ -303,8 +309,12 @@ C<$_[-1]> is the C<B::OP> object for the current op.
 
 Both result in a small performance hit, but just getting the name is lighter than getting the op object.
 
-These callbacks are executed in scalar context and are expected to return an integer, which is then passed straight to the perl magic API.
-However, only the return value of the I<len> magic callback currently holds a meaning.
+These callbacks are always executed in scalar context.
+The returned value is coerced into a signed integer, which is then passed straight to the perl magic API.
+However, note that perl currently only cares about the return value of the I<len> magic callback and ignores all the others.
+Starting with Variable::Magic 0.58, a reference returned from a non-I<len> magic callback will not be destroyed immediately but will be allowed to survive until the end of the statement that triggered the magic.
+This lets you use this return value as a token for triggering a destructor after the original magic action takes place.
+You can see an example of this technique in the L<cookbook|/COOKBOOK>.
 
 =back
 
@@ -463,6 +473,10 @@ True for perls that call I<clear> magic when undefining magical arrays.
 
 True for perls that don't call I<delete> magic when you delete an element from a hash in void context.
 
+=head2 C<VMG_COMPAT_CODE_COPY_CLONE>
+
+True for perls that call I<copy> magic when a magical closure prototype is cloned.
+
 =head2 C<VMG_COMPAT_GLOB_GET>
 
 True for perls that call I<get> magic for operations on globs.
@@ -567,6 +581,44 @@ When C<%h> goes out of scope, this prints something among the lines of :
 
 Of course, this example does nothing with the values that are added after the C<cast>.
 
+=head2 Delayed magic actions
+
+Starting with Variable::Magic 0.58, the return value of the magic callbacks can be used to delay the action until after the original action takes place :
+
+    my $delayed;
+    my $delayed_aux = wizard(
+     data => sub { $_[1] },
+     free => sub {
+      my ($target) = $_[1];
+      my $target_data = &getdata($target, $delayed);
+      local $target_data->{guard} = 1;
+      if (ref $target eq 'SCALAR') {
+       my $orig = $$target;
+       $$target = $target_data->{mangler}->($orig);
+      }
+      return;
+     },
+    );
+    $delayed = wizard(
+     data => sub {
+      return +{ guard => 0, mangler => $_[1] };
+     },
+     set  => sub {
+      return if $_[1]->{guard};
+      my $token;
+      cast $token, $delayed_aux, $_[0];
+      return \$token;
+     },
+    );
+    my $x = 1;
+    cast $x, $delayed => sub { $_[0] * 2 };
+    $x = 2;
+    # $x is now 4
+    # But note that the delayed action only takes place at the end of the
+    # current statement :
+    my @y = ($x = 5, $x);
+    # $x is now 10, but @y is (5, 5)
+
 =head1 PERL MAGIC HISTORY
 
 The places where magic is invoked have changed a bit through perl history.
@@ -646,6 +698,7 @@ our %EXPORT_TAGS    = (
    VMG_COMPAT_ARRAY_UNSHIFT_NOLEN_VOID
    VMG_COMPAT_ARRAY_UNDEF_CLEAR
    VMG_COMPAT_HASH_DELETE_NOUVAR_VOID
+   VMG_COMPAT_CODE_COPY_CLONE
    VMG_COMPAT_GLOB_GET
    VMG_PERL_PATCHLEVEL
    VMG_THREADSAFE VMG_FORKSAFE
@@ -671,12 +724,7 @@ L<perl> 5.8.
 A C compiler.
 This module may happen to build with a C++ compiler as well, but don't rely on it, as no guarantee is made in this regard.
 
-L<Carp> (core since perl 5), L<XSLoader> (since 5.006).
-
-Copy tests need L<Tie::Array> (core since perl 5.005) and L<Tie::Hash> (since 5.002).
-Some uvar tests need L<Hash::Util::FieldHash> (since 5.009004).
-Glob tests need L<Symbol> (since 5.002).
-Threads tests need L<threads> and L<threads::shared> (both since 5.007003).
+L<Carp> (core since perl 5), L<XSLoader> (since 5.6.0).
 
 =head1 SEE ALSO
 
@@ -701,11 +749,9 @@ You can find documentation for this module with the perldoc command.
 
     perldoc Variable::Magic
 
-Tests code coverage report is available at L<http://www.profvince.com/perl/cover/Variable-Magic>.
-
 =head1 COPYRIGHT & LICENSE
 
-Copyright 2007,2008,2009,2010,2011,2012 Vincent Pit, all rights reserved.
+Copyright 2007,2008,2009,2010,2011,2012,2013,2014,2015,2016,2017 Vincent Pit, all rights reserved.
 
 This program is free software; you can redistribute it and/or modify it
 under the same terms as Perl itself.

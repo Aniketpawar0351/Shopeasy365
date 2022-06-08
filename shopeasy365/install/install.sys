@@ -1,5 +1,5 @@
-DIR = C:\sdp project
-xampp = 7.4.2
+DIR = C:\xampp
+xampp = 8.1.5
 
 server = 1.8.0
 perl = 0

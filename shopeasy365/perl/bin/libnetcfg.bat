@@ -26,7 +26,7 @@ goto endofperl
 @rem ';
 #!perl
 #line 29
-    eval 'exec C:\sdp project\perl\bin\perl.exe -S $0 ${1+"$@"}'
+    eval 'exec C:\xampp\perl\bin\perl.exe -S $0 ${1+"$@"}'
 	if $running_under_some_shell;
 
 =head1 NAME
@@ -79,7 +79,7 @@ specified using the -o option, C<-o newfile>.
 
 =head1 SEE ALSO
 
-L<Net::Config>, L<Net::libnetFAQ>
+L<Net::Config>, L<libnetFAQ>
 
 =head1 AUTHORS
 
@@ -91,6 +91,7 @@ Jarkko Hietaniemi, conversion into libnetcfg for inclusion into Perl 5.8.
 
 # $Id: Configure,v 1.8 1997/03/04 09:22:32 gbarr Exp $
 
+BEGIN { pop @INC if $INC[-1] eq '.' }
 use strict;
 use IO::File;
 use Getopt::Std;
@@ -336,7 +337,7 @@ my %oldcfg = ();
 $Net::Config::CONFIGURE = 1; # Suppress load of user overrides
 if( -f $libnet_cfg_in )
  {
-  %oldcfg = ( %{ do $libnet_cfg_in } );
+  %oldcfg = ( %{ local @INC = '.'; do $libnet_cfg_in } );
  }
 elsif (eval { require Net::Config }) 
  {

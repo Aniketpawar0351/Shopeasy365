@@ -32,8 +32,8 @@ abstract class AbstractServiceConfigurator extends AbstractConfigurator
     {
         // default tags should be added last
         foreach ($this->defaultTags as $name => $attributes) {
-            foreach ($attributes as $attributes) {
-                $this->definition->addTag($name, $attributes);
+            foreach ($attributes as $attribute) {
+                $this->definition->addTag($name, $attribute);
             }
         }
         $this->defaultTags = [];
@@ -42,7 +42,7 @@ abstract class AbstractServiceConfigurator extends AbstractConfigurator
     /**
      * Registers a service.
      */
-    final public function set(string $id, string $class = null): ServiceConfigurator
+    final public function set(?string $id, string $class = null): ServiceConfigurator
     {
         $this->__destruct();
 

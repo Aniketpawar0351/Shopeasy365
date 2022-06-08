@@ -15,26 +15,18 @@ use strict;
 use warnings;
 use Template;
 use Template::Stash;
+use XSLoader;
 
 our $AUTOLOAD;
 
-BEGIN {
-    require DynaLoader;
-    @Template::Stash::XS::ISA = qw( DynaLoader Template::Stash );
+our @ISA = qw( Template::Stash );
 
-    eval {
-        bootstrap Template::Stash::XS $Template::VERSION;
-    };
-    if ($@) {
-        die "Couldn't load Template::Stash::XS $Template::VERSION:\n\n$@\n";
-    }
-}
+XSLoader::load 'Template::Stash::XS', $Template::VERSION;
 
 sub DESTROY {
     # no op
     1;
 }
-
 
 # catch missing method calls here so perl doesn't barf 
 # trying to load *.al files 
@@ -127,7 +119,7 @@ Doug Steinwand E<lt>dsteinwand@citysearch.comE<gt>
 
 =head1 COPYRIGHT
 
-Copyright (C) 1996-2012 Andy Wardley.  All Rights Reserved.
+Copyright (C) 1996-2013 Andy Wardley.  All Rights Reserved.
 
 This module is free software; you can redistribute it and/or
 modify it under the same terms as Perl itself.

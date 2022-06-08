@@ -1,3 +1,4 @@
+
 <?php
 session_start();
 $_SESSION['name1']=$_POST['name'];
@@ -23,6 +24,7 @@ if(isset($_POST['purpose']) && isset($_POST['name']) && isset($_POST['email']) &
             "email" => $_POST['email'],
             "redirect_url" => "http://localhost/success.php"
             ));
+            echo $response;
         header('Location:'. $response['longurl']);
     }
     catch (Exception $e) {

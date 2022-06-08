@@ -14,56 +14,40 @@
 package Win32::API::Callback;
 use strict;
 use warnings;
-use vars qw( $VERSION @ISA $Stage2FuncPtrPkd );
+use vars qw( $VERSION $Stage2FuncPtrPkd );
 
-$VERSION = '0.75';
+$VERSION = '0.84';
 
-
-require Exporter;      # to export the constants to the main:: space
-require DynaLoader;    # to dynuhlode the module.
-@ISA = qw( Exporter DynaLoader );
+#require XSLoader;    # to dynuhlode the module. #already loaded by Win32::API
 #use Data::Dumper;
 
-sub DEBUG {
-    if ($WIN32::API::DEBUG) {
-        printf @_ if @_ or return 1;
-    }
-    else {
-        return 0;
-    }
-}
-
 use Win32::API qw ( WriteMemory ) ;
-use Win32::API::Type;
-use Config;
-#use Win32::API::Struct; #not implemented
-
 
 BEGIN {
     #there is supposed to be 64 bit IVs on 32 bit perl compatibility here
     #but it is untested
-    #Win64 added in 5.7.3
-    eval "sub IVSIZE () { ".length(pack($] >= 5.007003 ? 'J' : 'I' ,0))." }";
+    *IVSIZE = *Win32::API::IVSIZE;
     #what kind of stack processing/calling convention/machine code we needed
-    eval "sub ISX64 () { ".(index($Config{'archname'},"MSWin32-x64") == 0 ?  1 : 0)." }";
+    eval "sub ISX64 () { ".(Win32::API::PTRSIZE() == 8 ?  1 : 0)." }";
     eval 'sub OPV () {'.$].'}';
     sub OPV();
     sub CONTEXT_XMM0();
     sub CONTEXT_RAX();
-    *UseMI64 = *Win32::API::UseMI64; #keep UseMI64 out of export list
     *IsBadStringPtr = *Win32::API::IsBadStringPtr;
     sub PTRSIZE ();
     *PTRSIZE = *Win32::API::PTRSIZE;
     sub PTRLET ();
     *PTRLET = *Win32::API::Type::pointer_pack_type;
-    if(OPV <= 5.008000){ #dont have unpackstring in C
+    if(OPV <= 5.008000){ #don't have unpackstring in C
         eval('sub _CallUnpack {return unpack($_[0], $_[1]);}');
     }
+    *DEBUGCONST = *Win32::API::DEBUGCONST;
+    *DEBUG = *Win32::API::DEBUG;
 }
 #######################################################################
 # dynamically load in the API extension module.
 #
-bootstrap Win32::API::Callback;
+XSLoader::load 'Win32::API::Callback', $VERSION;
 
 #######################################################################
 # PUBLIC METHODS
@@ -101,10 +85,10 @@ sub new {
     $self->{sub} = $proc;
     $self->{cdecl} = Win32::API::calltype_to_num($callconvention);
 
-    DEBUG "(PM)Callback::new: calling CallbackCreate($self)...\n";
+    DEBUG "(PM)Callback::new: calling CallbackCreate($self)...\n" if DEBUGCONST;
     my $hproc = MakeCB($self);
 
-    DEBUG "(PM)Callback::new: hproc=$hproc\n";
+    DEBUG "(PM)Callback::new: hproc=$hproc\n" if DEBUGCONST;
 
     $self->{code} = $hproc;
 
@@ -114,7 +98,7 @@ sub new {
 
 sub MakeStruct {
     my ($self, $n, $addr) = @_;
-    DEBUG "(PM)Win32::API::Callback::MakeStruct: got self='$self'\n";
+    DEBUG "(PM)Win32::API::Callback::MakeStruct: got self='$self'\n" if DEBUGCONST;
     my $struct = Win32::API::Struct->new($self->{intypes}->[$n]);
     $struct->FromMemory($addr);
     return $struct;
@@ -134,7 +118,7 @@ sub MakeStruct {
 #    for(@{$self->{intypes}}){ #elements of intypes are not 1 to 1 with stack params
 #        my ($typeletter, $packedparam, $finalParam, $unpackletter)  = ($_, $arr->[$i]);
 #        
-#        #structs dont work, this is broken code from old version
+#        #structs don't work, this is broken code from old version
 #        #$self->{intypes} is letters types not C prototype params
 #        #C prototype support would have to exist for MakeStruct to work
 #        if(    $typeletter eq 'S' || $typeletter eq 's'){
@@ -318,8 +302,9 @@ sub MakeCB{
     .("\x50"#           push    eax
     ."\xB8").$Stage2FuncPtrPkd # mov     eax, 0C0DE0001h
     .("\xFF\xD0"#       call    eax
-    #since ST(0) is volatile, we dont care if we fill it with garbage
+    #since ST(0) is volatile, we don't care if we fill it with garbage
     ."\x80\x7D\xFE\x00"#cmp    [ebp+FuncRtnCxtVar.F_Or_D], 0
+    ."\xDD\xD8"#       fstp    st(0) pop a FP reg to make space on FPU stack
     ."\x74\x05"#       jz      5 bytes
     ."\xDD\x45\xF4"#   fld     qword ptr [ebp+retval] (double)
     ."\xEB\x03"#       jmp     3 bytes
@@ -327,7 +312,7 @@ sub MakeCB{
     #rewind sp to entry sp, no pop push after this point
     ."\x83\xC4\x24"#   add     esp, 24h
     ."\x8B\x45\xF4"#   mov     eax, dword ptr [ebp+retval]
-    #edx might be garbage, we dont care, caller only looks at volatile
+    #edx might be garbage, we don't care, caller only looks at volatile
     #registers that the caller's prototype says the caller does
     ."\x8B\x55\xF8"#   mov     edx, dword ptr [ebp+retval+4]
     #can't use retn op, it requires a immediate count, our count is in a register
@@ -340,7 +325,7 @@ sub MakeCB{
 
 
     #begin x64 part
-    #these packs dont constant fold in < 5.17 :-(
+    #these packs don't constant fold in < 5.17 :-(
     #they are here for readability
     :(''.pack('C', 0b01000000 #REX base
             | 0b00001000 #REX.W
@@ -510,7 +495,7 @@ that causes all quads to be accepted as, and returned as L<Math::Int64>
 objects. 4 to 8 byte long pass by copy/return type C aggregate types
 are very rare in Windows, but they are supported as "in" and return
 types by using 'q'/'Q' on 32 and 64 bits. Converting between the C aggregate
-and its representation as a quad is upto the reader. For "out" in
+and its representation as a quad is up to the reader. For "out" in
 Win32::API::Callback (not "in"), if the argument is a reference, it will
 automatically be treated as a Math::Int64 object without having to
 previously call this function.
@@ -524,7 +509,7 @@ value is a double precision number (double)
 =item C<Unimplemented types>:
 Unimplemented in Win32::API::Callback types such as shorts, chars, and
 smaller than "machine word size" (32/64bit) numbers can be processed
-by specifiying N, then masking off the high bytes.
+by specifying N, then masking off the high bytes.
 For example, to get a char, specify N, then do C<$numeric_char = $_[2] & 0xFF;>
 in your Perl callback sub. To get a short, specify N, then do
 C<$numeric_char = $_[2] & 0xFFFF;> in your Perl callback sub.
@@ -540,7 +525,7 @@ C<$numeric_char = $_[2] & 0xFFFF;> in your Perl callback sub.
     $CallbackObj = Win32::API::Callback->new( sub { print "hello world";},
                                             $in, $out);
 
-Creates and returns a new Win32::API::Callback object. Calling convetion
+Creates and returns a new Win32::API::Callback object. Calling convention
 parameter is optional.  Calling convention parameter has same behaviour as
 Win32::API's calling convention parameter. C prototype parsing of Win32::API
 is not available with Win32::API::Callback. If the C caller assumes the
@@ -549,7 +534,7 @@ parameters, if they are floats or doubles they will be garbage. Note there is
 no way to create a Win32::API::Callback callback with a vararg prototype.
 A workaround is to put "enough" Ns as the in types, and stop looking at the @_
 slices in your Perl sub callback after a certain count. Usually the first
-parameter will somehow indiciate how many additional stack parameters you are
+parameter will somehow indicate how many additional stack parameters you are
 receiving. The Ns in @_ will eventually become garbage, technically they are
 the return address, saved registers, and C stack allocated variables of the
 caller. They are effectivly garbage for your vararg callback. All vararg
@@ -561,6 +546,18 @@ or 'WINAPIV'.
 =head3 UseMI64
 
 See L<Win32::API/UseMI64>.
+
+=head1 KNOWN ISSUES
+
+=over 4
+
+=item *
+
+Callback is safe across a Win32 psuedo-fork. Callback is not safe across a
+Cygwin fork. On Cygwin, in the child process of the fork, a Segmentation Fault
+will happen if the Win32::API::Callback callback is is called.
+
+=back
 
 =head1 SEE ALSO
 

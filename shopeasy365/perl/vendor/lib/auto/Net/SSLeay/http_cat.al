@@ -3,7 +3,7 @@
 # See AutoSplit.pm.
 package Net::SSLeay;
 
-#line 1150 "blib\lib\Net\SSLeay.pm (autosplit into blib\lib\auto\Net\SSLeay\http_cat.al)"
+#line 1271 "blib\lib\Net\SSLeay.pm (autosplit into blib\lib\auto\Net\SSLeay\http_cat.al)"
 sub http_cat { # address, port, message --> returns reply / (reply,errs,cert)
     my ($dest_serv, $port, $out_message) = @_;
     my ($got, $errs, $written);
@@ -21,7 +21,7 @@ sub http_cat { # address, port, message --> returns reply / (reply,errs,cert)
     goto cleanup unless $written;
 
     warn "waiting for reply...\n" if $trace>2;
-    ($got, $errs) = tcp_read_all(200000);
+    ($got, $errs) = tcp_read_all();
     warn "Got " . blength($got) . " bytes.\n" if $trace==3;
     warn "Got `$got' (" . blength($got) . " bytes)\n" if $trace>3;
 

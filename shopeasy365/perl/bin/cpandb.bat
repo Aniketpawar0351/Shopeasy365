@@ -1,39 +1,29 @@
 @rem = '--*-Perl-*--
-@echo off
-if "%OS%" == "Windows_NT" goto WinNT
-IF EXIST "%~dp0perl.exe" (
-"%~dp0perl.exe" -x -S "%0" %1 %2 %3 %4 %5 %6 %7 %8 %9
-) ELSE IF EXIST "%~dp0..\..\bin\perl.exe" (
-"%~dp0..\..\bin\perl.exe" -x -S "%0" %1 %2 %3 %4 %5 %6 %7 %8 %9
-) ELSE (
-perl -x -S "%0" %1 %2 %3 %4 %5 %6 %7 %8 %9
-)
-
-goto endofperl
+@set "ErrorLevel="
+@if "%OS%" == "Windows_NT" @goto WinNT
+@perl -x -S "%0" %1 %2 %3 %4 %5 %6 %7 %8 %9
+@set ErrorLevel=%ErrorLevel%
+@goto endofperl
 :WinNT
-IF EXIST "%~dp0perl.exe" (
-"%~dp0perl.exe" -x -S %0 %*
-) ELSE IF EXIST "%~dp0..\..\bin\perl.exe" (
-"%~dp0..\..\bin\perl.exe" -x -S %0 %*
-) ELSE (
-perl -x -S %0 %*
-)
-
-if NOT "%COMSPEC%" == "%SystemRoot%\system32\cmd.exe" goto endofperl
-if %errorlevel% == 9009 echo You do not have Perl in your PATH.
-if errorlevel 1 goto script_failed_so_exit_with_non_zero_val 2>nul
-goto endofperl
+@perl -x -S %0 %*
+@set ErrorLevel=%ErrorLevel%
+@if NOT "%COMSPEC%" == "%SystemRoot%\system32\cmd.exe" @goto endofperl
+@if %ErrorLevel% == 9009 @echo You do not have Perl in your PATH.
+@goto endofperl
 @rem ';
 #!usr/bin/perl -w
-#line 29
+#line 30
 
-# $Id: cpandb 33 2011-06-13 04:17:28Z stro $
+# $Id: cpandb 84 2020-05-31 06:29:34Z stro $
 
 use strict;
 use warnings;
+
 use CPAN::SQLite;
-use CPAN::SQLite::Util qw(%chaps);
 use Getopt::Long;
+
+our $VERSION = 0.219;
+
 my ($CPAN, $setup, $help, $reindex, $index, $query,
     $db_name, $db_dir, $module, $dist, $cpanid, $update);
 
@@ -70,7 +60,7 @@ END
 }
 
 if (defined $setup and defined $reindex) {
-  die "Must reindex on an exisiting database";
+  die "Must reindex on an existing database";
 }
 
 if ($index) {
@@ -84,7 +74,7 @@ if ($index) {
 }
 else {
 
-  my $max_results = 100;
+  my $max_results = $ENV{'CPAN_SQLITE_MAX_RESULTS'};
   my $obj = CPAN::SQLite->new(CPAN => $CPAN,
                               db_name => $db_name,
                               db_dir => $db_dir,
@@ -101,25 +91,15 @@ else {
       }
       else {
         my $abs = $results->{mod_abs} || '';
-        my $dslip = '';
-        if (my $dslip_info = $results->{dslip_info}) {
-          foreach my $entry (@$dslip_info) {
-            $dslip .= "  $entry->{desc}: $entry->{what}\n";
-          }
-        }
-        my $chapter_desc = $results->{chapter_desc} || '';
         print << "EOI";
 
 Module: $results->{mod_name}
 Abstract: $abs
 Version: $results->{mod_vers}
-Chapter: $chapter_desc
 Distribution: $results->{dist_name}
 CPAN author: $results->{cpanid}
 CPAN file: $results->{dist_file}
 Download: $results->{download}
-dslip info:
-$dslip
 EOI
       }
       last RESULTS;
@@ -133,12 +113,6 @@ EOI
       }
       else {
         my $abs = $results->{dist_abs} || '';
-        my $dslip = '';
-        if (my $dslip_info = $results->{dslip_info}) {
-          foreach my $entry (@$dslip_info) {
-            $dslip .= "  $entry->{desc}: $entry->{what}\n";
-          }
-        }
         print << "EOI";
 
 Distribution: $results->{dist_name}
@@ -147,8 +121,6 @@ Version: $results->{dist_vers}
 CPAN author: $results->{cpanid}
 CPAN file: $results->{dist_file}
 Download: $results->{download}
-dslip info:
-$dslip
 EOI
       }
       my $mods = $results->{mods};
@@ -194,6 +166,10 @@ __END__
 =head1 NAME
 
 cpandb - interface to C<CPAN::SQLite>
+
+=head1 VERSION
+
+version 0.219
 
 =head1 DESCRIPTION
 
@@ -254,12 +230,12 @@ maintaining the database. These include
 =item * C<--setup>
 
 This specifies that the database is to be created and
-populated from the CPAN indices; any exisiting database
+populated from the CPAN indices; any existing database
 will be overwritten.
 
 =item * C<--update>
 
-This is used to update an exisiting database,
+This is used to update an existing database,
 which must have first been created with the C<setup>
 option.
 
@@ -294,12 +270,15 @@ This provides information on the specified CPAN author id
 All search terms are assumed to be exact matches in a
 case-insensitive manner.
 
+There's no limit on maximum number of records. If you need to adjust the number
+because you get too many results, set the CPAN_SQLITE_MAX_RESULTS environment
+variable.
+
 =head1 SEE ALSO
 
 L<CPAN::SQLite>.
 
 =cut
-
-
 __END__
 :endofperl
+@set "ErrorLevel=" & @goto _undefined_label_ 2>NUL || @"%COMSPEC%" /d/c @exit %ErrorLevel%

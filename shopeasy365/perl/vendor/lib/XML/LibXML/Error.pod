@@ -47,7 +47,7 @@ Unlike most other XML::LibXML objects, XML::LibXML::Error doesn't wrap an
 underlying I<<<<<< libxml2 >>>>>> structure directly, but rather transforms it to a blessed Perl hash reference
 containing the individual fields of the structured error information as hash
 key-value pairs. Individual items (fields) of a structured error can either be
-obtained directly as $@->{field}, or using autoloaded methods such as as
+obtained directly as $@->{field}, or using autoloaded methods such as
 $@->field() (where field is the field name). XML::LibXML::Error objects have
 the following fields: domain, code, level, file, line, nodename, message, str1,
 str2, str3, num1, num2, and _prev (some of them may be undefined).
@@ -214,14 +214,14 @@ In recent libxml2 versions, this value contains a column number of the error or
   $string = $@->context();
 
 For parsing errors, this field contains about 80 characters of the XML near the
-place where the error occurred. The field C<<<<<< $@->column() >>>>>> contains the corresponding offset. Where N/A, the field is undefined.
+place where the error occurred. The field C<<<<<< $@-E<gt>column() >>>>>> contains the corresponding offset. Where N/A, the field is undefined.
 
 
 =item column
 
   $offset = $@->column();
 
-See C<<<<<< $@->column() >>>>>> above.
+See C<<<<<< $@-E<gt>column() >>>>>> above.
 
 
 =item _prev
@@ -244,7 +244,7 @@ Petr Pajas
 
 =head1 VERSION
 
-2.0014
+2.0206
 
 =head1 COPYRIGHT
 
@@ -255,3 +255,10 @@ Petr Pajas
 2006-2009, Petr Pajas.
 
 =cut
+
+
+=head1 LICENSE
+
+This program is free software; you can redistribute it and/or modify it under
+the same terms as Perl itself.
+

@@ -111,7 +111,7 @@
                        Defaults to "dist".
 
   manager.password     The login password of a user that is assigned the
-                       "manager-script" role (so that he or she can execute
+                       "manager-script" role (so that they can execute
                        commands via the "/manager" web application)
 
   manager.url          The URL of the "/manager" web application on the
@@ -119,7 +119,7 @@
                        applications and web services.
 
   manager.username     The login username of a user that is assigned the
-                       "manager-script" role (so that he or she can execute
+                       "manager-script" role (so that they can execute
                        commands via the "/manager" web application)
 
 -->
@@ -233,13 +233,10 @@
 
   compile.deprecation  Should compilation include the deprecation option?
 
-  compile.optimize     Should compilation include the optimize option?
-
 -->
 
   <property name="compile.debug"       value="true"/>
   <property name="compile.deprecation" value="false"/>
-  <property name="compile.optimize"    value="true"/>
 
 
 
@@ -293,8 +290,7 @@
     <javac srcdir="${src.home}"
           destdir="${build.home}/WEB-INF/classes"
             debug="${compile.debug}"
-      deprecation="${compile.deprecation}"
-         optimize="${compile.optimize}">
+      deprecation="${compile.deprecation}">
         <classpath refid="compile.classpath"/>
     </javac>
 

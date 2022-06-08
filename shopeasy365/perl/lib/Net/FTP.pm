@@ -1,43 +1,72 @@
 # Net::FTP.pm
 #
-# Copyright (c) 1995-2004 Graham Barr <gbarr@pobox.com>. All rights reserved.
-# This program is free software; you can redistribute it and/or
-# modify it under the same terms as Perl itself.
+# Copyright (C) 1995-2004 Graham Barr.  All rights reserved.
+# Copyright (C) 2013-2017, 2020 Steve Hay.  All rights reserved.
+# This module is free software; you can redistribute it and/or modify it under
+# the same terms as Perl itself, i.e. under the terms of either the GNU General
+# Public License or the Artistic License, as specified in the F<LICENCE> file.
 #
 # Documentation (at end) improved 1996 by Nathan Torkington <gnat@frii.com>.
 
 package Net::FTP;
 
-require 5.001;
+use 5.008001;
 
 use strict;
-use vars qw(@ISA $VERSION);
-use Carp;
+use warnings;
 
-use Socket 1.3;
+use Carp;
+use Fcntl qw(O_WRONLY O_RDONLY O_APPEND O_CREAT O_TRUNC);
 use IO::Socket;
-use Time::Local;
 use Net::Cmd;
 use Net::Config;
-use Fcntl qw(O_WRONLY O_RDONLY O_APPEND O_CREAT O_TRUNC);
+use Socket;
+use Time::Local;
 
-$VERSION = '2.77';
-@ISA     = qw(Exporter Net::Cmd IO::Socket::INET);
+our $VERSION = '3.13';
 
-# Someday I will "use constant", when I am not bothered to much about
-# compatability with older releases of perl
-
-use vars qw($TELNET_IAC $TELNET_IP $TELNET_DM);
-($TELNET_IAC, $TELNET_IP, $TELNET_DM) = (255, 244, 242);
-
-
+our $IOCLASS;
+my $family_key;
 BEGIN {
+  # Code for detecting if we can use SSL
+  my $ssl_class = eval {
+    require IO::Socket::SSL;
+    # first version with default CA on most platforms
+    no warnings 'numeric';
+    IO::Socket::SSL->VERSION(2.007);
+  } && 'IO::Socket::SSL';
 
-  # make a constant so code is fast'ish
-  my $is_os390 = $^O eq 'os390';
-  *trEBCDIC = sub () {$is_os390}
+  my $nossl_warn = !$ssl_class &&
+    'To use SSL please install IO::Socket::SSL with version>=2.007';
+
+  # Code for detecting if we can use IPv6
+  my $inet6_class = eval {
+    require IO::Socket::IP;
+    no warnings 'numeric';
+    IO::Socket::IP->VERSION(0.25);
+  } && 'IO::Socket::IP' || eval {
+    require IO::Socket::INET6;
+    no warnings 'numeric';
+    IO::Socket::INET6->VERSION(2.62);
+  } && 'IO::Socket::INET6';
+
+  sub can_ssl   { $ssl_class };
+  sub can_inet6 { $inet6_class };
+
+  $IOCLASS = $ssl_class || $inet6_class || 'IO::Socket::INET';
+  $family_key =
+    ( $ssl_class ? $ssl_class->can_ipv6 : $inet6_class || '' )
+      eq 'IO::Socket::IP'
+      ? 'Family' : 'Domain';
 }
 
+our @ISA = ('Exporter','Net::Cmd',$IOCLASS);
+
+use constant TELNET_IAC => 255;
+use constant TELNET_IP  => 244;
+use constant TELNET_DM  => 242;
+
+use constant EBCDIC => $^O eq 'os390';
 
 sub new {
   my $pkg = shift;
@@ -71,22 +100,45 @@ sub new {
     }
   }
 
+  my %tlsargs;
+  if (can_ssl()) {
+    # for name verification strip port from domain:port, ipv4:port, [ipv6]:port
+    (my $hostname = $host) =~s{(?<!:):\d+$}{};
+    %tlsargs = (
+      SSL_verifycn_scheme => 'ftp',
+      SSL_verifycn_name => $hostname,
+      # use SNI if supported by IO::Socket::SSL
+      $pkg->can_client_sni ? (SSL_hostname => $hostname):(),
+      # reuse SSL session of control connection in data connections
+      SSL_session_cache_size => 10,
+      SSL_session_key => $hostname,
+    );
+    # user defined SSL arg
+    $tlsargs{$_} = $arg{$_} for(grep { m{^SSL_} } keys %arg);
+    $tlsargs{SSL_reuse_ctx} = IO::Socket::SSL::SSL_Context->new(%tlsargs)
+      or return;
+
+  } elsif ($arg{SSL}) {
+    croak("IO::Socket::SSL >= 2.007 needed for SSL support");
+  }
+
   my $ftp = $pkg->SUPER::new(
     PeerAddr  => $peer,
-    PeerPort  => $arg{Port} || 'ftp(21)',
+    PeerPort  => $arg{Port} || ($arg{SSL} ? 'ftps(990)' : 'ftp(21)'),
     LocalAddr => $arg{'LocalAddr'},
+    $family_key => $arg{Domain} || $arg{Family},
     Proto     => 'tcp',
-    Timeout   => defined $arg{Timeout}
-    ? $arg{Timeout}
-    : 120
-    )
-    or return undef;
+    Timeout   => defined $arg{Timeout} ? $arg{Timeout} : 120,
+    %tlsargs,
+    $arg{SSL} ? ():( SSL_startHandshake => 0 ),
+  ) or return;
 
   ${*$ftp}{'net_ftp_host'}    = $host;                             # Remote hostname
   ${*$ftp}{'net_ftp_type'}    = 'A';                               # ASCII/binary/etc mode
   ${*$ftp}{'net_ftp_blksize'} = abs($arg{'BlockSize'} || 10240);
 
   ${*$ftp}{'net_ftp_localaddr'} = $arg{'LocalAddr'};
+  ${*$ftp}{'net_ftp_domain'} = $arg{Domain} || $arg{Family};
 
   ${*$ftp}{'net_ftp_firewall'} = $fire
     if (defined $fire);
@@ -99,6 +151,12 @@ sub new {
     : defined $fire            ? $NetConfig{ftp_ext_passive}
     : $NetConfig{ftp_int_passive};    # Whew! :-)
 
+  ${*$ftp}{net_ftp_tlsargs} = \%tlsargs if %tlsargs;
+  if ($arg{SSL}) {
+    ${*$ftp}{net_ftp_tlsprot} = 'P';
+    ${*$ftp}{net_ftp_tlsdirect} = 1;
+  }
+
   $ftp->hash(exists $arg{Hash} ? $arg{Hash} : 0, 1024);
 
   $ftp->autoflush(1);
@@ -107,7 +165,8 @@ sub new {
 
   unless ($ftp->response() == CMD_OK) {
     $ftp->close();
-    $@ = $ftp->message;
+    # keep @$ if no message. Happens, when response did not start with a code.
+    $@ = $ftp->message || $@;
     undef $ftp;
   }
 
@@ -122,6 +181,12 @@ sub new {
 sub host {
   my $me = shift;
   ${*$me}{'net_ftp_host'};
+}
+
+sub passive {
+  my $ftp = shift;
+  return ${*$ftp}{'net_ftp_passive'} unless @_;
+  ${*$ftp}{'net_ftp_passive'} = shift;
 }
 
 
@@ -200,7 +265,7 @@ sub mdtm {
 
   $ftp->_MDTM($file)
     && $ftp->message =~ /((\d\d)(\d\d\d?))(\d\d)(\d\d)(\d\d)(\d\d)(\d\d)/
-    ? timegm($8, $7, $6, $5, $4 - 1, $2 eq '19' ? $3 : ($1 - 1900))
+    ? timegm($8, $7, $6, $5, $4 - 1, $2 eq '19' ? ($3 + 1900) : $1)
     : undef;
 }
 
@@ -216,10 +281,9 @@ sub size {
   }
   elsif ($ftp->supported("STAT")) {
     my @msg;
-    return undef
+    return
       unless $ftp->_STAT($file) && (@msg = $ftp->message) == 3;
-    my $line;
-    foreach $line (@msg) {
+    foreach my $line (@msg) {
       return (split(/\s+/, $line))[4]
         if $line =~ /^[-rwxSsTt]{10}/;
     }
@@ -234,6 +298,35 @@ sub size {
   undef;
 }
 
+
+sub starttls {
+  my $ftp = shift;
+  can_ssl() or croak("IO::Socket::SSL >= 2.007 needed for SSL support");
+  $ftp->is_SSL and croak("called starttls within SSL session");
+  $ftp->_AUTH('TLS') == CMD_OK or return;
+
+  $ftp->connect_SSL or return;
+  $ftp->prot('P');
+  return 1;
+}
+
+sub prot {
+  my ($ftp,$prot) = @_;
+  $prot eq 'C' or $prot eq 'P' or croak("prot must by C or P");
+  $ftp->_PBSZ(0) or return;
+  $ftp->_PROT($prot) or return;
+  ${*$ftp}{net_ftp_tlsprot} = $prot;
+  return 1;
+}
+
+sub stoptls {
+  my $ftp = shift;
+  $ftp->is_SSL or croak("called stoptls outside SSL session");
+  ${*$ftp}{net_ftp_tlsdirect} and croak("cannot stoptls direct SSL session");
+  $ftp->_CCC() or return;
+  $ftp->stop_SSL();
+  return 1;
+}
 
 sub login {
   my ($ftp, $user, $pass, $acct) = @_;
@@ -336,7 +429,7 @@ sub login {
 
 
 sub account {
-  @_ == 2 or croak 'usage: $ftp->account( ACCT )';
+  @_ == 2 or croak 'usage: $ftp->account($acct)';
   my $ftp  = shift;
   my $acct = shift;
   $ftp->_ACCT($acct) == CMD_OK;
@@ -362,13 +455,13 @@ sub _auth_id {
 
 
 sub authorize {
-  @_ >= 1 || @_ <= 3 or croak 'usage: $ftp->authorize( [AUTH [, RESP]])';
+  @_ >= 1 || @_ <= 3 or croak 'usage: $ftp->authorize([$auth[, $resp]])';
 
   my ($ftp, $auth, $resp) = &_auth_id;
 
   my $ok = $ftp->_AUTH($auth || "");
 
-  $ok = $ftp->_RESP($resp || "")
+  return $ftp->_RESP($resp || "")
     if ($ok == CMD_MORE);
 
   $ok == CMD_OK;
@@ -376,12 +469,12 @@ sub authorize {
 
 
 sub rename {
-  @_ == 3 or croak 'usage: $ftp->rename(FROM, TO)';
+  @_ == 3 or croak 'usage: $ftp->rename($oldname, $newname)';
 
-  my ($ftp, $from, $to) = @_;
+  my ($ftp, $oldname, $newname) = @_;
 
-  $ftp->_RNFR($from)
-    && $ftp->_RNTO($to);
+  $ftp->_RNFR($oldname)
+    && $ftp->_RNTO($newname);
 }
 
 
@@ -393,7 +486,7 @@ sub type {
   return $oldval
     unless (defined $type);
 
-  return undef
+  return
     unless ($ftp->_TYPE($type, @_));
 
   ${*$ftp}{'net_ftp_type'} = join(" ", $type, @_);
@@ -410,8 +503,8 @@ sub alloc {
   return $oldval
     unless (defined $size);
 
-  return undef
-    unless ($ftp->_ALLO($size, @_));
+  return
+    unless ($ftp->supported("ALLO") and $ftp->_ALLO($size, @_));
 
   ${*$ftp}{'net_ftp_allo'} = join(" ", $size, @_);
 
@@ -422,9 +515,9 @@ sub alloc {
 sub abort {
   my $ftp = shift;
 
-  send($ftp, pack("CCC", $TELNET_IAC, $TELNET_IP, $TELNET_IAC), MSG_OOB);
+  send($ftp, pack("CCC", TELNET_IAC, TELNET_IP, TELNET_IAC), MSG_OOB);
 
-  $ftp->command(pack("C", $TELNET_DM) . "ABOR");
+  $ftp->command(pack("C", TELNET_DM) . "ABOR");
 
   ${*$ftp}{'net_ftp_dataconn'}->close()
     if defined ${*$ftp}{'net_ftp_dataconn'};
@@ -456,7 +549,7 @@ sub get {
   delete ${*$ftp}{'net_ftp_pasv'};
 
   $data = $ftp->retr($remote)
-    or return undef;
+    or return;
 
   if ($localfd) {
     $loc = $local;
@@ -467,7 +560,7 @@ sub get {
     unless (sysopen($loc, $local, O_CREAT | O_WRONLY | ($rest ? O_APPEND: O_TRUNC))) {
       carp "Cannot open Local file $local: $!\n";
       $data->abort;
-      return undef;
+      return;
     }
   }
 
@@ -475,7 +568,7 @@ sub get {
     carp "Cannot binmode Local file $local: $!\n";
     $data->abort;
     close($loc) unless $localfd;
-    return undef;
+    return;
   }
 
   $buf = '';
@@ -490,7 +583,7 @@ sub get {
   while (1) {
     last unless $len = $data->read($buf, $blksize);
 
-    if (trEBCDIC && $ftp->type ne 'I') {
+    if (EBCDIC && $ftp->type ne 'I') {
       $buf = $ftp->toebcdic($buf);
       $len = length($buf);
     }
@@ -505,7 +598,7 @@ sub get {
       $data->abort;
       close($loc)
         unless $localfd;
-      return undef;
+      return;
     }
   }
 
@@ -514,14 +607,14 @@ sub get {
   unless ($localfd) {
     unless (close($loc)) {
       carp "Cannot close file $local (perhaps disk space) $!\n";
-      return undef;
+      return;
     }
   }
 
   unless ($data->close())    # implied $ftp->response
   {
     carp "Unable to close datastream";
-    return undef;
+    return;
   }
 
   return $local;
@@ -529,7 +622,7 @@ sub get {
 
 
 sub cwd {
-  @_ == 1 || @_ == 2 or croak 'usage: $ftp->cwd( [ DIR ] )';
+  @_ == 1 || @_ == 2 or croak 'usage: $ftp->cwd([$dir])';
 
   my ($ftp, $dir) = @_;
 
@@ -566,7 +659,7 @@ sub pwd {
 # Initial version contributed by Dinkum Software
 #
 sub rmdir {
-  @_ == 2 || @_ == 3 or croak('usage: $ftp->rmdir( DIR [, RECURSE ] )');
+  @_ == 2 || @_ == 3 or croak('usage: $ftp->rmdir($dir[, $recurse])');
 
   # Pick off the args
   my ($ftp, $dir, $recurse) = @_;
@@ -577,15 +670,21 @@ sub rmdir {
     or !$recurse;
 
   # Try to delete the contents
-  # Get a list of all the files in the directory
-  my @filelist = grep { !/^\.{1,2}$/ } $ftp->ls($dir);
+  # Get a list of all the files in the directory, excluding the current and parent directories
+  my @filelist = map { /^(?:\S+;)+ (.+)$/ ? ($1) : () } grep { !/^(?:\S+;)*type=[cp]dir;/i } $ftp->_list_cmd("MLSD", $dir);
 
-  return undef
+  # Fallback to using the less well-defined NLST command if MLSD fails
+  @filelist = grep { !/^\.{1,2}$/ } $ftp->ls($dir)
+    unless @filelist;
+
+  return
     unless @filelist;    # failed, it is probably not a directory
 
+  return $ftp->delete($dir)
+    if @filelist == 1 and $dir eq $filelist[0];
+
   # Go thru and delete each file or the directory
-  my $file;
-  foreach $file (map { m,/, ? $_ : "$dir/$_" } @filelist) {
+  foreach my $file (map { m,/, ? $_ : "$dir/$_" } @filelist) {
     next                 # successfully deleted the file
       if $ftp->delete($file);
 
@@ -606,23 +705,23 @@ sub rmdir {
 
 
 sub restart {
-  @_ == 2 || croak 'usage: $ftp->restart( BYTE_OFFSET )';
+  @_ == 2 || croak 'usage: $ftp->restart($where)';
 
   my ($ftp, $where) = @_;
 
   ${*$ftp}{'net_ftp_rest'} = $where;
 
-  return undef;
+  return;
 }
 
 
 sub mkdir {
-  @_ == 2 || @_ == 3 or croak 'usage: $ftp->mkdir( DIR [, RECURSE ] )';
+  @_ == 2 || @_ == 3 or croak 'usage: $ftp->mkdir($dir[, $recurse])';
 
   my ($ftp, $dir, $recurse) = @_;
 
   $ftp->_MKD($dir) || $recurse
-    or return undef;
+    or return;
 
   my $path = $dir;
 
@@ -662,7 +761,7 @@ sub mkdir {
 
 
 sub delete {
-  @_ == 2 || croak 'usage: $ftp->delete( FILENAME )';
+  @_ == 2 || croak 'usage: $ftp->delete($filename)';
 
   $_[0]->_DELE($_[1]);
 }
@@ -688,7 +787,7 @@ sub _store_cmd {
 
   my $localfd = ref($local) || ref(\$local) eq "GLOB";
 
-  unless (defined $remote) {
+  if (!defined($remote) and 'STOU' ne uc($cmd)) {
     croak 'Must specify remote filename with stream input'
       if $localfd;
 
@@ -705,10 +804,10 @@ sub _store_cmd {
     # a pipe, or device) and if so get the file size from stat, and send
     # an ALLO command before sending the STOR, STOU, or APPE command.
     my $size = do { local $^W; -f $local && -s _ };    # no ALLO if sending data from a pipe
-    $ftp->_ALLO($size) if $size;
+    ${*$ftp}{'net_ftp_allo'} = $size if $size;
   }
   croak("Bad remote filename '$remote'\n")
-    if $remote =~ /[\r\n]/s;
+    if defined($remote) and $remote =~ /[\r\n]/s;
 
   if ($localfd) {
     $loc = $local;
@@ -718,22 +817,22 @@ sub _store_cmd {
 
     unless (sysopen($loc, $local, O_RDONLY)) {
       carp "Cannot open Local file $local: $!\n";
-      return undef;
+      return;
     }
   }
 
   if ($ftp->type eq 'I' && !binmode($loc)) {
     carp "Cannot binmode Local file $local: $!\n";
-    return undef;
+    return;
   }
 
   delete ${*$ftp}{'net_ftp_port'};
   delete ${*$ftp}{'net_ftp_pasv'};
 
-  $sock = $ftp->_data_cmd($cmd, $remote)
-    or return undef;
+  $sock = $ftp->_data_cmd($cmd, grep { defined } $remote)
+    or return;
 
-  $remote = ($ftp->message =~ /FILE:\s*(.*)/)[0]
+  $remote = ($ftp->message =~ /\w+\s*:\s*(.*)/)[0]
     if 'STOU' eq uc $cmd;
 
   my $blksize = ${*$ftp}{'net_ftp_blksize'};
@@ -746,7 +845,7 @@ sub _store_cmd {
   while (1) {
     last unless $len = read($loc, $buf = "", $blksize);
 
-    if (trEBCDIC && $ftp->type ne 'I') {
+    if (EBCDIC && $ftp->type ne 'I') {
       $buf = $ftp->toascii($buf);
       $len = length($buf);
     }
@@ -763,7 +862,7 @@ sub _store_cmd {
       close($loc)
         unless $localfd;
       print $hashh "\n" if $hashh;
-      return undef;
+      return;
     }
   }
 
@@ -773,7 +872,7 @@ sub _store_cmd {
     unless $localfd;
 
   $sock->close()
-    or return undef;
+    or return;
 
   if ('STOU' eq uc $cmd and $ftp->message =~ m/unique\s+file\s*name\s*:\s*(.*)\)|"(.*)"/) {
     require File::Basename;
@@ -785,38 +884,44 @@ sub _store_cmd {
 
 
 sub port {
-  @_ == 1 || @_ == 2 or croak 'usage: $ftp->port([PORT])';
+    @_ == 1 || @_ == 2 or croak 'usage: $self->port([$port])';
+    return _eprt('PORT',@_);
+}
 
-  my ($ftp, $port) = @_;
-  my $ok;
+sub eprt {
+  @_ == 1 || @_ == 2 or croak 'usage: $self->eprt([$port])';
+  return _eprt('EPRT',@_);
+}
 
-  delete ${*$ftp}{'net_ftp_intern_port'};
-
-  unless (defined $port) {
-
-    # create a Listen socket at same address as the command socket
-
-    ${*$ftp}{'net_ftp_listen'} ||= IO::Socket::INET->new(
-      Listen    => 5,
-      Proto     => 'tcp',
+sub _eprt {
+  my ($cmd,$ftp,$port) = @_;
+  delete ${*$ftp}{net_ftp_intern_port};
+  unless ($port) {
+    my $listen = ${*$ftp}{net_ftp_listen} ||= $IOCLASS->new(
+      Listen    => 1,
       Timeout   => $ftp->timeout,
       LocalAddr => $ftp->sockhost,
+      $family_key  => $ftp->sockdomain,
+      can_ssl() ? (
+        %{ ${*$ftp}{net_ftp_tlsargs} },
+        SSL_startHandshake => 0,
+      ):(),
     );
-
-    my $listen = ${*$ftp}{'net_ftp_listen'};
-
-    my ($myport, @myaddr) = ($listen->sockport, split(/\./, $listen->sockhost));
-
-    $port = join(',', @myaddr, $myport >> 8, $myport & 0xff);
-
-    ${*$ftp}{'net_ftp_intern_port'} = 1;
+    ${*$ftp}{net_ftp_intern_port} = 1;
+    my $fam = ($listen->sockdomain == AF_INET) ? 1:2;
+    if ( $cmd eq 'EPRT' || $fam == 2 ) {
+      $port = "|$fam|".$listen->sockhost."|".$listen->sockport."|";
+      $cmd = 'EPRT';
+    } else {
+      my $p = $listen->sockport;
+      $port = join(',',split(m{\.},$listen->sockhost),$p >> 8,$p & 0xff);
+    }
+  } elsif (ref($port) eq 'ARRAY') {
+    $port = join(',',split(m{\.},@$port[0]),@$port[1] >> 8,@$port[1] & 0xff);
   }
-
-  $ok = $ftp->_PORT($port);
-
-  ${*$ftp}{'net_ftp_port'} = $port;
-
-  $ok;
+  my $ok = $cmd eq 'EPRT' ? $ftp->_EPRT($port) : $ftp->_PORT($port);
+  ${*$ftp}{net_ftp_port} = $port if $ok;
+  return $ok;
 }
 
 
@@ -825,14 +930,27 @@ sub dir { shift->_list_cmd("LIST", @_); }
 
 
 sub pasv {
-  @_ == 1 or croak 'usage: $ftp->pasv()';
-
   my $ftp = shift;
+  @_ and croak 'usage: $ftp->port()';
+  return $ftp->epsv if $ftp->sockdomain != AF_INET;
+  delete ${*$ftp}{net_ftp_intern_port};
 
-  delete ${*$ftp}{'net_ftp_intern_port'};
+  if ( $ftp->_PASV &&
+    $ftp->message =~ m{(\d+,\d+,\d+,\d+),(\d+),(\d+)} ) {
+    my $port = 256 * $2 + $3;
+    ( my $ip = $1 ) =~s{,}{.}g;
+    return ${*$ftp}{net_ftp_pasv} = [ $ip,$port ];
+  }
+  return;
+}
 
-  $ftp->_PASV && $ftp->message =~ /(\d+(,\d+)+)/
-    ? ${*$ftp}{'net_ftp_pasv'} = $1
+sub epsv {
+  my $ftp = shift;
+  @_ and croak 'usage: $ftp->epsv()';
+  delete ${*$ftp}{net_ftp_intern_port};
+
+  $ftp->_EPSV && $ftp->message =~ m{\(([\x33-\x7e])\1\1(\d+)\1\)}
+    ? ${*$ftp}{net_ftp_pasv} = [ $ftp->peerhost, $2 ]
     : undef;
 }
 
@@ -844,7 +962,7 @@ sub unique_name {
 
 
 sub supported {
-  @_ == 2 or croak 'usage: $ftp->supported( CMD )';
+  @_ == 2 or croak 'usage: $ftp->supported($cmd)';
   my $ftp  = shift;
   my $cmd  = uc shift;
   my $hash = ${*$ftp}{'net_ftp_supported'} ||= {};
@@ -852,11 +970,14 @@ sub supported {
   return $hash->{$cmd}
     if exists $hash->{$cmd};
 
+  return $hash->{$cmd} = 1
+    if $ftp->feature($cmd);
+
   return $hash->{$cmd} = 0
     unless $ftp->_HELP($cmd);
 
   my $text = $ftp->message;
-  if ($text =~ /following\s+commands/i) {
+  if ($text =~ /following.+commands/i) {
     $text =~ s/^.*\n//;
     while ($text =~ /(\*?)(\w+)(\*?)/sg) {
       $hash->{"\U$2"} = !length("$1$3");
@@ -913,40 +1034,56 @@ sub _extract_path {
 
 
 sub _dataconn {
-  my $ftp  = shift;
-  my $data = undef;
-  my $pkg  = "Net::FTP::" . $ftp->type;
-
-  eval "require " . $pkg;
-
+  my $ftp = shift;
+  my $pkg = "Net::FTP::" . $ftp->type;
+  eval "require " . $pkg ## no critic (BuiltinFunctions::ProhibitStringyEval)
+    or croak("cannot load $pkg required for type ".$ftp->type);
   $pkg =~ s/ /_/g;
+  delete ${*$ftp}{net_ftp_dataconn};
 
-  delete ${*$ftp}{'net_ftp_dataconn'};
-
-  if (defined ${*$ftp}{'net_ftp_pasv'}) {
-    my @port = map { 0 + $_ } split(/,/, ${*$ftp}{'net_ftp_pasv'});
-
-    $data = $pkg->new(
-      PeerAddr  => join(".", @port[0 .. 3]),
-      PeerPort  => $port[4] * 256 + $port[5],
-      LocalAddr => ${*$ftp}{'net_ftp_localaddr'},
-      Proto     => 'tcp'
-    );
+  my $conn;
+  my $pasv = ${*$ftp}{net_ftp_pasv};
+  if ($pasv) {
+    $conn = $pkg->new(
+      PeerAddr  => $pasv->[0],
+      PeerPort  => $pasv->[1],
+      LocalAddr => ${*$ftp}{net_ftp_localaddr},
+      $family_key => ${*$ftp}{net_ftp_domain},
+      Timeout   => $ftp->timeout,
+      can_ssl() ? (
+        SSL_startHandshake => 0,
+        $ftp->is_SSL ? (
+          SSL_reuse_ctx => $ftp,
+          SSL_verifycn_name => ${*$ftp}{net_ftp_tlsargs}{SSL_verifycn_name},
+          # This will cause the use of SNI if supported by IO::Socket::SSL.
+          $ftp->can_client_sni ? (
+            SSL_hostname  => ${*$ftp}{net_ftp_tlsargs}{SSL_hostname}
+          ):(),
+        ) :( %{${*$ftp}{net_ftp_tlsargs}} ),
+      ):(),
+    ) or return;
+  } elsif (my $listen =  delete ${*$ftp}{net_ftp_listen}) {
+    $conn = $listen->accept($pkg) or return;
+    $conn->timeout($ftp->timeout);
+    close($listen);
+  } else {
+    croak("no listener in active mode");
   }
-  elsif (defined ${*$ftp}{'net_ftp_listen'}) {
-    $data = ${*$ftp}{'net_ftp_listen'}->accept($pkg);
-    close(delete ${*$ftp}{'net_ftp_listen'});
+
+  if (( ${*$ftp}{net_ftp_tlsprot} || '') eq 'P') {
+    if ($conn->connect_SSL) {
+      # SSL handshake ok
+    } else {
+      carp("failed to ssl upgrade dataconn: $IO::Socket::SSL::SSL_ERROR");
+      return;
+    }
   }
 
-  if ($data) {
-    ${*$data} = "";
-    $data->timeout($ftp->timeout);
-    ${*$ftp}{'net_ftp_dataconn'} = $data;
-    ${*$data}{'net_ftp_cmd'}     = $ftp;
-    ${*$data}{'net_ftp_blksize'} = ${*$ftp}{'net_ftp_blksize'};
-  }
-
-  $data;
+  ${*$ftp}{net_ftp_dataconn} = $conn;
+  ${*$conn} = "";
+  ${*$conn}{net_ftp_cmd} = $ftp;
+  ${*$conn}{net_ftp_blksize} = ${*$ftp}{net_ftp_blksize};
+  return $conn;
 }
 
 
@@ -977,7 +1114,7 @@ sub _list_cmd {
 
   $data->close();
 
-  if (trEBCDIC) {
+  if (EBCDIC) {
     for (@$list) { $_ = $ftp->toebcdic($_) }
   }
 
@@ -994,7 +1131,7 @@ sub _data_cmd {
   my $where = delete ${*$ftp}{'net_ftp_rest'} || 0;
   my $arg;
 
-  for $arg (@_) {
+  for my $arg (@_) {
     croak("Bad argument '$arg'\n")
       if $arg =~ /[\r\n]/s;
   }
@@ -1003,25 +1140,28 @@ sub _data_cmd {
     && !defined ${*$ftp}{'net_ftp_pasv'}
     && !defined ${*$ftp}{'net_ftp_port'})
   {
-    my $data = undef;
+    return unless defined $ftp->pasv;
 
-    $ok = defined $ftp->pasv;
-    $ok = $ftp->_REST($where)
-      if $ok && $where;
-
-    if ($ok) {
-      $ftp->command($cmd, @_);
-      $data = $ftp->_dataconn();
-      $ok   = CMD_INFO == $ftp->response();
-      if ($ok) {
-        $data->reading
-          if $data && $cmd =~ /RETR|LIST|NLST/;
-        return $data;
-      }
-      $data->_close
-        if $data;
+    if ($where and !$ftp->_REST($where)) {
+      my ($status, $message) = ($ftp->status, $ftp->message);
+      $ftp->abort;
+      $ftp->set_status($status, $message);
+      return;
     }
-    return undef;
+
+    # first send command, then open data connection
+    # otherwise the peer might not do a full accept (with SSL
+    # handshake if PROT P)
+    $ftp->command($cmd, @_);
+    my $data = $ftp->_dataconn();
+    if (CMD_INFO == $ftp->response()) {
+      $data->reading
+        if $data && $cmd =~ /RETR|LIST|NLST|MLSD/;
+      return $data;
+    }
+    $data->_close if $data;
+
+    return;
   }
 
   $ok = $ftp->port
@@ -1031,8 +1171,15 @@ sub _data_cmd {
   $ok = $ftp->_REST($where)
     if $ok && $where;
 
-  return undef
+  return
     unless $ok;
+
+  if ($cmd =~ /(STOR|APPE|STOU)/ and exists ${*$ftp}{net_ftp_allo} and
+      $ftp->supported("ALLO"))
+  {
+    $ftp->_ALLO(delete ${*$ftp}{net_ftp_allo})
+      or return;
+  }
 
   $ftp->command($cmd, @_);
 
@@ -1048,7 +1195,7 @@ sub _data_cmd {
     my $data = $ftp->_dataconn();
 
     $data->reading
-      if $data && $cmd =~ /RETR|LIST|NLST/;
+      if $data && $cmd =~ /RETR|LIST|NLST|MLSD/;
 
     return $data;
   }
@@ -1056,7 +1203,7 @@ sub _data_cmd {
 
   close(delete ${*$ftp}{'net_ftp_listen'});
 
-  return undef;
+  return;
 }
 
 ##
@@ -1077,7 +1224,7 @@ sub command {
 
 sub response {
   my $ftp  = shift;
-  my $code = $ftp->SUPER::response();
+  my $code = $ftp->SUPER::response() || 5;    # assume 500 if undef
 
   delete ${*$ftp}{'net_ftp_pasv'}
     if ($code != CMD_MORE && $code != CMD_INFO);
@@ -1093,8 +1240,9 @@ sub parse_response {
   my $ftp = shift;
 
   # Darn MS FTP server is a load of CRAP !!!!
+  # Expect to see undef here.
   return ()
-    unless ${*$ftp}{'net_cmd_code'} + 0;
+    unless 0 + (${*$ftp}{'net_cmd_code'} || 0);
 
   (${*$ftp}{'net_cmd_code'}, 1);
 }
@@ -1117,19 +1265,19 @@ sub pasv_xfer {
     unless (defined $dfile);
 
   my $port = $sftp->pasv
-    or return undef;
+    or return;
 
   $dftp->port($port)
-    or return undef;
+    or return;
 
-  return undef
+  return
     unless ($unique ? $dftp->stou($dfile) : $dftp->stor($dfile));
 
   unless ($sftp->retr($sfile) && $sftp->response == CMD_INFO) {
     $sftp->retr($sfile);
     $dftp->abort;
     $dftp->response();
-    return undef;
+    return;
   }
 
   $dftp->pasv_wait($sftp);
@@ -1137,33 +1285,36 @@ sub pasv_xfer {
 
 
 sub pasv_wait {
-  @_ == 2 or croak 'usage: $ftp->pasv_wait(NON_PASV_FTP)';
+  @_ == 2 or croak 'usage: $ftp->pasv_wait($non_pasv_server)';
 
-  my ($ftp, $non_pasv) = @_;
+  my ($ftp, $non_pasv_server) = @_;
   my ($file, $rin, $rout);
 
   vec($rin = '', fileno($ftp), 1) = 1;
   select($rout = $rin, undef, undef, undef);
 
-  $ftp->response();
-  $non_pasv->response();
+  my $dres = $ftp->response();
+  my $sres = $non_pasv_server->response();
 
-  return undef
-    unless $ftp->ok() && $non_pasv->ok();
+  return
+    unless $dres == CMD_OK && $sres == CMD_OK;
+
+  return
+    unless $ftp->ok() && $non_pasv_server->ok();
 
   return $1
     if $ftp->message =~ /unique file name:\s*(\S*)\s*\)/;
 
   return $1
-    if $non_pasv->message =~ /unique file name:\s*(\S*)\s*\)/;
+    if $non_pasv_server->message =~ /unique file name:\s*(\S*)\s*\)/;
 
   return 1;
 }
 
 
 sub feature {
-  @_ == 2 or croak 'usage: $ftp->feature( NAME )';
-  my ($ftp, $feat) = @_;
+  @_ == 2 or croak 'usage: $ftp->feature($name)';
+  my ($ftp, $name) = @_;
 
   my $feature = ${*$ftp}{net_ftp_feature} ||= do {
     my @feat;
@@ -1181,7 +1332,7 @@ sub feature {
     \@feat;
   };
 
-  return grep { /^\Q$feat\E\b/i } @$feature;
+  return grep { /^\Q$name\E\b/i } @$feature;
 }
 
 
@@ -1189,7 +1340,7 @@ sub cmd { shift->command(@_)->response() }
 
 ########################################
 #
-# RFC959 commands
+# RFC959 + RFC2428 + RFC4217 commands
 #
 
 
@@ -1213,6 +1364,11 @@ sub _SIZE { shift->command("SIZE", @_)->response() == CMD_OK }
 sub _HELP { shift->command("HELP", @_)->response() == CMD_OK }
 sub _STAT { shift->command("STAT", @_)->response() == CMD_OK }
 sub _FEAT { shift->command("FEAT", @_)->response() == CMD_OK }
+sub _PBSZ { shift->command("PBSZ", @_)->response() == CMD_OK }
+sub _PROT { shift->command("PROT", @_)->response() == CMD_OK }
+sub _CCC  { shift->command("CCC", @_)->response() == CMD_OK }
+sub _EPRT { shift->command("EPRT", @_)->response() == CMD_OK }
+sub _EPSV { shift->command("EPSV", @_)->response() == CMD_OK }
 sub _APPE { shift->command("APPE", @_)->response() == CMD_INFO }
 sub _LIST { shift->command("LIST", @_)->response() == CMD_INFO }
 sub _NLST { shift->command("NLST", @_)->response() == CMD_INFO }
@@ -1244,6 +1400,7 @@ sub _SYST { shift->unsupported(@_) }
 sub _STRU { shift->unsupported(@_) }
 sub _REIN { shift->unsupported(@_) }
 
+
 1;
 
 __END__
@@ -1273,10 +1430,17 @@ Net::FTP - FTP Client class
 =head1 DESCRIPTION
 
 C<Net::FTP> is a class implementing a simple FTP client in Perl as
-described in RFC959.  It provides wrappers for a subset of the RFC959
-commands.
+described in RFC959.  It provides wrappers for the commonly used subset of the
+RFC959 commands.
+If L<IO::Socket::IP> or L<IO::Socket::INET6> is installed it also provides
+support for IPv6 as defined in RFC2428.
+And with L<IO::Socket::SSL> installed it provides support for implicit FTPS
+and explicit FTPS as defined in RFC4217.
 
-=head1 OVERVIEW
+The Net::FTP class is a subclass of Net::Cmd and (depending on avaibility) of
+IO::Socket::IP, IO::Socket::INET6 or IO::Socket::INET.
+
+=head2 Overview
 
 FTP stands for File Transfer Protocol.  It is a way of transferring
 files between networked machines.  The protocol defines a client
@@ -1303,28 +1467,29 @@ EBCDIC format.  Binary (also known as image) format sends the data as
 a contiguous bit stream.  Byte format transfers the data as bytes, the
 values of which remain the same regardless of differences in byte size
 between the two machines (in theory - in practice you should only use
-this if you really know what you're doing).
+this if you really know what you're doing).  This class does not support
+the EBCDIC or byte formats, and will default to binary instead if they
+are attempted.
 
-=head1 CONSTRUCTOR
+=head2 Class Methods
 
 =over 4
 
-=item new ([ HOST ] [, OPTIONS ])
+=item C<new([$host][, %options])>
 
-This is the constructor for a new Net::FTP object. C<HOST> is the
+This is the constructor for a new Net::FTP object. C<$host> is the
 name of the remote host to which an FTP connection is required.
 
-C<HOST> is optional. If C<HOST> is not given then it may instead be
+C<$host> is optional. If C<$host> is not given then it may instead be
 passed as the C<Host> option described below. 
 
-C<OPTIONS> are passed in a hash like fashion, using key and value pairs.
+C<%options> are passed in a hash like fashion, using key and value pairs.
 Possible options are:
 
 B<Host> - FTP host to connect to. It may be a single scalar, as defined for
 the C<PeerAddr> option in L<IO::Socket::INET>, or a reference to
 an array with hosts to try in turn. The L</host> method will return the value
 which was used to connect to the host.
-
 
 B<Firewall> - The name of a machine which acts as an FTP firewall. This can be
 overridden by an environment variable C<FTP_FIREWALL>. If specified, and the
@@ -1344,7 +1509,14 @@ transfers. (defaults to 10240)
 B<Port> - The port number to connect to on the remote machine for the
 FTP connection
 
-B<Timeout> - Set a timeout value (defaults to 120)
+B<SSL> - If the connection should be done from start with SSL, contrary to later
+upgrade with C<starttls>.
+
+B<SSL_*> - SSL arguments which will be applied when upgrading the control or
+data connection to SSL. You can use SSL arguments as documented in
+L<IO::Socket::SSL>, but it will usually use the right arguments already.
+
+B<Timeout> - Set a timeout value in seconds (defaults to 120)
 
 B<Debug> - debug level (see the debug method in L<Net::Cmd>)
 
@@ -1367,24 +1539,35 @@ simply invokes the C<hash()> method for you, so that hash marks
 are displayed for all transfers.  You can, of course, call C<hash()>
 explicitly whenever you'd like.
 
-B<LocalAddr> - Local address to use for all socket connections, this
-argument will be passed to L<IO::Socket::INET>
+B<LocalAddr> - Local address to use for all socket connections. This
+argument will be passed to the super class, i.e. L<IO::Socket::INET>
+or L<IO::Socket::IP>.
+
+B<Domain> - Domain to use, i.e. AF_INET or AF_INET6. This
+argument will be passed to the IO::Socket super class.
+This can be used to enforce IPv4 even with L<IO::Socket::IP>
+which would default to IPv6.
+B<Family> is accepted as alternative name for B<Domain>.
 
 If the constructor fails undef will be returned and an error message will
 be in $@
 
 =back
 
-=head1 METHODS
+=head2 Object Methods
 
 Unless otherwise stated all methods return either a I<true> or I<false>
 value, with I<true> meaning that the operation was a success. When a method
 states that it returns a value, failure will be returned as I<undef> or an
 empty list.
 
+C<Net::FTP> inherits from C<Net::Cmd> so methods defined in C<Net::Cmd> may
+be used to send commands to the remote FTP server in addition to the methods
+documented here.
+
 =over 4
 
-=item login ([LOGIN [,PASSWORD [, ACCOUNT] ] ])
+=item C<login([$login[, $password[, $account]]])>
 
 Log into the remote FTP server with the given login information. If
 no arguments are given then the C<Net::FTP> uses the C<Net::Netrc>
@@ -1396,79 +1579,114 @@ will be used for password.
 If the connection is via a firewall then the C<authorize> method will
 be called with no arguments.
 
-=item authorize ( [AUTH [, RESP]])
+=item C<starttls()>
+
+Upgrade existing plain connection to SSL.
+The SSL arguments have to be given in C<new> already because they are needed for
+data connections too.
+
+=item C<stoptls()>
+
+Downgrade existing SSL connection back to plain.
+This is needed to work with some FTP helpers at firewalls, which need to see the
+PORT and PASV commands and responses to dynamically open the necessary ports.
+In this case C<starttls> is usually only done to protect the authorization.
+
+=item C<prot($level)>
+
+Set what type of data channel protection the client and server will be using.
+Only C<$level>s "C" (clear) and "P" (private) are supported.
+
+=item C<host()>
+
+Returns the value used by the constructor, and passed to the IO::Socket super
+class to connect to the host.
+
+=item C<account($acct)>
+
+Set a string identifying the user's account.
+
+=item C<authorize([$auth[, $resp]])>
 
 This is a protocol used by some firewall ftp proxies. It is used
 to authorise the user to send data out.  If both arguments are not specified
 then C<authorize> uses C<Net::Netrc> to do a lookup.
 
-=item site (ARGS)
+=item C<site($args)>
 
 Send a SITE command to the remote server and wait for a response.
 
 Returns most significant digit of the response code.
 
-=item ascii
+=item C<ascii()>
 
 Transfer file in ASCII. CRLF translation will be done if required
 
-=item binary
+=item C<binary()>
 
 Transfer file in binary mode. No transformation will be done.
 
 B<Hint>: If both server and client machines use the same line ending for
 text files, then it will be faster to transfer all files in binary mode.
 
-=item rename ( OLDNAME, NEWNAME )
+=item C<type([$type])>
 
-Rename a file on the remote FTP server from C<OLDNAME> to C<NEWNAME>. This
+Set or get if files will be transferred in ASCII or binary mode.
+
+=item C<rename($oldname, $newname)>
+
+Rename a file on the remote FTP server from C<$oldname> to C<$newname>. This
 is done by sending the RNFR and RNTO commands.
 
-=item delete ( FILENAME )
+=item C<delete($filename)>
 
-Send a request to the server to delete C<FILENAME>.
+Send a request to the server to delete C<$filename>.
 
-=item cwd ( [ DIR ] )
+=item C<cwd([$dir])>
 
 Attempt to change directory to the directory given in C<$dir>.  If
 C<$dir> is C<"..">, the FTP C<CDUP> command is used to attempt to
 move up one directory. If no directory is given then an attempt is made
 to change the directory to the root directory.
 
-=item cdup ()
+=item C<cdup()>
 
 Change directory to the parent of the current directory.
 
-=item pwd ()
+=item C<passive([$passive])>
+
+Set or get if data connections will be initiated in passive mode.
+
+=item C<pwd()>
 
 Returns the full pathname of the current directory.
 
-=item restart ( WHERE )
+=item C<restart($where)>
 
 Set the byte offset at which to begin the next data transfer. Net::FTP simply
 records this value and uses it when during the next data transfer. For this
 reason this method will not return an error, but setting it may cause
 a subsequent data transfer to fail.
 
-=item rmdir ( DIR [, RECURSE ])
+=item C<rmdir($dir[, $recurse])>
 
-Remove the directory with the name C<DIR>. If C<RECURSE> is I<true> then
+Remove the directory with the name C<$dir>. If C<$recurse> is I<true> then
 C<rmdir> will attempt to delete everything inside the directory.
 
-=item mkdir ( DIR [, RECURSE ])
+=item C<mkdir($dir[, $recurse])>
 
-Create a new directory with the name C<DIR>. If C<RECURSE> is I<true> then
+Create a new directory with the name C<$dir>. If C<$recurse> is I<true> then
 C<mkdir> will attempt to create all the directories in the given path.
 
 Returns the full pathname to the new directory.
 
-=item alloc ( SIZE [, RECORD_SIZE] )
+=item C<alloc($size[, $record_size])>
 
 The alloc command allows you to give the ftp server a hint about the size
 of the file about to be transferred using the ALLO ftp command. Some storage
 systems use this to make intelligent decisions about how to store the file.
-The C<SIZE> argument represents the size of the file in bytes. The
-C<RECORD_SIZE> argument indicates a maximum record or page size for files
+The C<$size> argument represents the size of the file in bytes. The
+C<$record_size> argument indicates a maximum record or page size for files
 sent with a record or page structure.
 
 The size of the file will be determined, and sent to the server
@@ -1476,70 +1694,70 @@ automatically for normal files so that this method need only be called if
 you are transferring data from a socket, named pipe, or other stream not
 associated with a normal file.
 
-=item ls ( [ DIR ] )
+=item C<ls([$dir])>
 
-Get a directory listing of C<DIR>, or the current directory.
-
-In an array context, returns a list of lines returned from the server. In
-a scalar context, returns a reference to a list.
-
-=item dir ( [ DIR ] )
-
-Get a directory listing of C<DIR>, or the current directory in long format.
+Get a directory listing of C<$dir>, or the current directory.
 
 In an array context, returns a list of lines returned from the server. In
 a scalar context, returns a reference to a list.
 
-=item get ( REMOTE_FILE [, LOCAL_FILE [, WHERE]] )
+=item C<dir([$dir])>
 
-Get C<REMOTE_FILE> from the server and store locally. C<LOCAL_FILE> may be
+Get a directory listing of C<$dir>, or the current directory in long format.
+
+In an array context, returns a list of lines returned from the server. In
+a scalar context, returns a reference to a list.
+
+=item C<get($remote_file[, $local_file[, $where]])>
+
+Get C<$remote_file> from the server and store locally. C<$local_file> may be
 a filename or a filehandle. If not specified, the file will be stored in
 the current directory with the same leafname as the remote file.
 
-If C<WHERE> is given then the first C<WHERE> bytes of the file will
+If C<$where> is given then the first C<$where> bytes of the file will
 not be transferred, and the remaining bytes will be appended to
 the local file if it already exists.
 
-Returns C<LOCAL_FILE>, or the generated local file name if C<LOCAL_FILE>
+Returns C<$local_file>, or the generated local file name if C<$local_file>
 is not given. If an error was encountered undef is returned.
 
-=item put ( LOCAL_FILE [, REMOTE_FILE ] )
+=item C<put($local_file[, $remote_file])>
 
-Put a file on the remote server. C<LOCAL_FILE> may be a name or a filehandle.
-If C<LOCAL_FILE> is a filehandle then C<REMOTE_FILE> must be specified. If
-C<REMOTE_FILE> is not specified then the file will be stored in the current
-directory with the same leafname as C<LOCAL_FILE>.
+Put a file on the remote server. C<$local_file> may be a name or a filehandle.
+If C<$local_file> is a filehandle then C<$remote_file> must be specified. If
+C<$remote_file> is not specified then the file will be stored in the current
+directory with the same leafname as C<$local_file>.
 
-Returns C<REMOTE_FILE>, or the generated remote filename if C<REMOTE_FILE>
+Returns C<$remote_file>, or the generated remote filename if C<$remote_file>
 is not given.
 
 B<NOTE>: If for some reason the transfer does not complete and an error is
 returned then the contents that had been transferred will not be remove
 automatically.
 
-=item put_unique ( LOCAL_FILE [, REMOTE_FILE ] )
+=item C<put_unique($local_file[, $remote_file])>
 
 Same as put but uses the C<STOU> command.
 
 Returns the name of the file on the server.
 
-=item append ( LOCAL_FILE [, REMOTE_FILE ] )
+=item C<append($local_file[, $remote_file])>
 
 Same as put but appends to the file on the remote server.
 
-Returns C<REMOTE_FILE>, or the generated remote filename if C<REMOTE_FILE>
+Returns C<$remote_file>, or the generated remote filename if C<$remote_file>
 is not given.
 
-=item unique_name ()
+=item C<unique_name()>
 
 Returns the name of the last file stored on the server using the
 C<STOU> command.
 
-=item mdtm ( FILE )
+=item C<mdtm($file)>
 
 Returns the I<modification time> of the given file
 
-=item size ( FILE )
+=item C<size($file)>
 
 Returns the size in bytes for the given file as stored on the remote server.
 
@@ -1549,11 +1767,11 @@ and the remote server and local machine have different ideas about
 "End Of Line" then the size of file on the local machine after transfer
 may be different.
 
-=item supported ( CMD )
+=item C<supported($cmd)>
 
 Returns TRUE if the remote server supports the given command.
 
-=item hash ( [FILEHANDLE_GLOB_REF],[ BYTES_PER_HASH_MARK] )
+=item C<hash([$filehandle_glob_ref[, $bytes_per_hash_mark]])>
 
 Called without parameters, or with the first argument false, hash marks
 are suppressed.  If the first argument is true but not a reference to a 
@@ -1562,7 +1780,7 @@ of bytes per hash mark printed, and defaults to 1024.  In all cases the
 return value is a reference to an array of two:  the filehandle glob reference
 and the bytes per hash mark.
 
-=item feature ( NAME )
+=item C<feature($name)>
 
 Determine if the server supports the specified feature. The return
 value is a list of lines the server responded with to describe the
@@ -1588,33 +1806,33 @@ reference to a C<Net::FTP::dataconn> based object.
 
 =over 4
 
-=item nlst ( [ DIR ] )
+=item C<nlst([$dir])>
 
 Send an C<NLST> command to the server, with an optional parameter.
 
-=item list ( [ DIR ] )
+=item C<list([$dir])>
 
 Same as C<nlst> but using the C<LIST> command
 
-=item retr ( FILE )
+=item C<retr($file)>
 
-Begin the retrieval of a file called C<FILE> from the remote server.
+Begin the retrieval of a file called C<$file> from the remote server.
 
-=item stor ( FILE )
+=item C<stor($file)>
 
-Tell the server that you wish to store a file. C<FILE> is the
+Tell the server that you wish to store a file. C<$file> is the
 name of the new file that should be created.
 
-=item stou ( FILE )
+=item C<stou($file)>
 
 Same as C<stor> but using the C<STOU> command. The name of the unique
 file which was created on the server will be available via the C<unique_name>
 method after the data connection has been closed.
 
-=item appe ( FILE )
+=item C<appe($file)>
 
 Tell the server that we want to append some data to the end of a file
-called C<FILE>. If this file does not exist then create it.
+called C<$file>. If this file does not exist then create it.
 
 =back
 
@@ -1628,17 +1846,22 @@ C<put_unique> and those that do not require data connections.
 
 =over 4
 
-=item port ( [ PORT ] )
+=item C<port([$port])>
 
-Send a C<PORT> command to the server. If C<PORT> is specified then it is sent
-to the server. If not, then a listen socket is created and the correct information
-sent to the server.
+=item C<eprt([$port])>
 
-=item pasv ()
+Send a C<PORT> (IPv4) or C<EPRT> (IPv6) command to the server. If C<$port> is
+specified then it is sent to the server. If not, then a listen socket is created
+and the correct information sent to the server.
 
-Tell the server to go into passive mode. Returns the text that represents the
-port on which the server is listening, this text is in a suitable form to
-sent to another ftp server using the C<port> method.
+=item C<pasv()>
+
+=item C<epsv()>
+
+Tell the server to go into passive mode (C<pasv> for IPv4, C<epsv> for IPv6).
+Returns the text that represents the port on which the server is listening, this
+text is in a suitable form to send to another ftp server using the C<port> or
+C<eprt> method.
 
 =back
 
@@ -1647,41 +1870,38 @@ servers, providing that these two servers can connect directly to each other.
 
 =over 4
 
-=item pasv_xfer ( SRC_FILE, DEST_SERVER [, DEST_FILE ] )
+=item C<pasv_xfer($src_file, $dest_server[, $dest_file ])>
 
 This method will do a file transfer between two remote ftp servers. If
-C<DEST_FILE> is omitted then the leaf name of C<SRC_FILE> will be used.
+C<$dest_file> is omitted then the leaf name of C<$src_file> will be used.
 
-=item pasv_xfer_unique ( SRC_FILE, DEST_SERVER [, DEST_FILE ] )
+=item C<pasv_xfer_unique($src_file, $dest_server[, $dest_file ])>
 
 Like C<pasv_xfer> but the file is stored on the remote server using
 the STOU command.
 
-=item pasv_wait ( NON_PASV_SERVER )
+=item C<pasv_wait($non_pasv_server)>
 
 This method can be used to wait for a transfer to complete between a passive
 server and a non-passive server. The method should be called on the passive
 server with the C<Net::FTP> object for the non-passive server passed as an
 argument.
 
-=item abort ()
+=item C<abort()>
 
 Abort the current data transfer.
 
-=item quit ()
+=item C<quit()>
 
 Send the QUIT command to the remote FTP server and close the socket connection.
 
 =back
 
-=head2 Methods for the adventurous
-
-C<Net::FTP> inherits from C<Net::Cmd> so methods defined in C<Net::Cmd> may
-be used to send commands to the remote FTP server.
+=head2 Methods for the Adventurous
 
 =over 4
 
-=item quot (CMD [,ARGS])
+=item C<quot($cmd[, $args])>
 
 Send a command, that Net::FTP does not directly support, to the remote
 server and wait for a response.
@@ -1691,139 +1911,147 @@ Returns most significant digit of the response code.
 B<WARNING> This call should only be used on commands that do not require
 data connections. Misuse of this method can hang the connection.
 
+=item C<can_inet6()>
+
+Returns whether we can use IPv6.
+
+=item C<can_ssl()>
+
+Returns whether we can use SSL.
+
 =back
 
-=head1 THE dataconn CLASS
+=head2 The dataconn Class
 
 Some of the methods defined in C<Net::FTP> return an object which will
-be derived from this class.The dataconn class itself is derived from
-the C<IO::Socket::INET> class, so any normal IO operations can be performed.
-However the following methods are defined in the dataconn class and IO should
-be performed using these.
+be derived from the C<Net::FTP::dataconn> class. See L<Net::FTP::dataconn> for
+more details.
 
-=over 4
-
-=item read ( BUFFER, SIZE [, TIMEOUT ] )
-
-Read C<SIZE> bytes of data from the server and place it into C<BUFFER>, also
-performing any <CRLF> translation necessary. C<TIMEOUT> is optional, if not
-given, the timeout value from the command connection will be used.
-
-Returns the number of bytes read before any <CRLF> translation.
-
-=item write ( BUFFER, SIZE [, TIMEOUT ] )
-
-Write C<SIZE> bytes of data from C<BUFFER> to the server, also
-performing any <CRLF> translation necessary. C<TIMEOUT> is optional, if not
-given, the timeout value from the command connection will be used.
-
-Returns the number of bytes written before any <CRLF> translation.
-
-=item bytes_read ()
-
-Returns the number of bytes read so far.
-
-=item abort ()
-
-Abort the current data transfer.
-
-=item close ()
-
-Close the data connection and get a response from the FTP server. Returns
-I<true> if the connection was closed successfully and the first digit of
-the response from the server was a '2'.
-
-=back
-
-=head1 UNIMPLEMENTED
+=head2 Unimplemented
 
 The following RFC959 commands have not been implemented:
 
 =over 4
 
-=item B<SMNT>
+=item C<SMNT>
 
 Mount a different file system structure without changing login or
 accounting information.
 
-=item B<HELP>
+=item C<HELP>
 
 Ask the server for "helpful information" (that's what the RFC says) on
 the commands it accepts.
 
-=item B<MODE>
+=item C<MODE>
 
 Specifies transfer mode (stream, block or compressed) for file to be
 transferred.
 
-=item B<SYST>
+=item C<SYST>
 
 Request remote server system identification.
 
-=item B<STAT>
+=item C<STAT>
 
 Request remote server status.
 
-=item B<STRU>
+=item C<STRU>
 
 Specifies file structure for file to be transferred.
 
-=item B<REIN>
+=item C<REIN>
 
 Reinitialize the connection, flushing all I/O and account information.
 
 =back
 
-=head1 REPORTING BUGS
-
-When reporting bugs/problems please include as much information as possible.
-It may be difficult for me to reproduce the problem as almost every setup
-is different.
-
-A small script which yields the problem will probably be of help. It would
-also be useful if this script was run with the extra options C<Debug => 1>
-passed to the constructor, and the output sent with the bug report. If you
-cannot include a small script then please include a Debug trace from a
-run of your program which does yield the problem.
-
-=head1 AUTHOR
-
-Graham Barr <gbarr@pobox.com>
-
-=head1 SEE ALSO
-
-L<Net::Netrc>
-L<Net::Cmd>
-
-ftp(1), ftpd(8), RFC 959
-http://www.cis.ohio-state.edu/htbin/rfc/rfc959.html
-
-=head1 USE EXAMPLES
+=head1 EXAMPLES
 
 For an example of the use of Net::FTP see
 
 =over 4
 
-=item http://www.csh.rit.edu/~adam/Progs/
+=item L<https://www.csh.rit.edu/~adam/Progs/>
 
 C<autoftp> is a program that can retrieve, send, or list files via
 the FTP protocol in a non-interactive manner.
 
 =back
 
-=head1 CREDITS
+=head1 EXPORTS
 
-Henry Gabryjelski <henryg@WPI.EDU> - for the suggestion of creating directories
-recursively.
+I<None>.
 
-Nathan Torkington <gnat@frii.com> - for some input on the documentation.
+=head1 KNOWN BUGS
 
-Roderick Schertler <roderick@gate.net> - for various inputs
+See L<https://rt.cpan.org/Dist/Display.html?Status=Active&Queue=libnet>.
+
+=head2 Reporting Bugs
+
+When reporting bugs/problems please include as much information as possible.
+It may be difficult for me to reproduce the problem as almost every setup
+is different.
+
+A small script which yields the problem will probably be of help. It would
+also be useful if this script was run with the extra options C<< Debug => 1 >>
+passed to the constructor, and the output sent with the bug report. If you
+cannot include a small script then please include a Debug trace from a
+run of your program which does yield the problem.
+
+=head1 SEE ALSO
+
+L<Net::Netrc>,
+L<Net::Cmd>,
+L<IO::Socket::SSL>;
+
+L<ftp(1)>,
+L<ftpd(8)>;
+
+L<https://www.ietf.org/rfc/rfc959.txt>,
+L<https://www.ietf.org/rfc/rfc2428.txt>,
+L<https://www.ietf.org/rfc/rfc4217.txt>.
+
+=head1 ACKNOWLEDGEMENTS
+
+Henry Gabryjelski E<lt>L<henryg@WPI.EDU|mailto:henryg@WPI.EDU>E<gt> - for the
+suggestion of creating directories recursively.
+
+Nathan Torkington E<lt>L<gnat@frii.com|mailto:gnat@frii.com>E<gt> - for some
+input on the documentation.
+
+Roderick Schertler E<lt>L<roderick@gate.net|mailto:roderick@gate.net>E<gt> - for
+various inputs
+
+=head1 AUTHOR
+
+Graham Barr E<lt>L<gbarr@pobox.com|mailto:gbarr@pobox.com>E<gt>.
+
+Steve Hay E<lt>L<shay@cpan.org|mailto:shay@cpan.org>E<gt> is now maintaining
+libnet as of version 1.22_02.
 
 =head1 COPYRIGHT
 
-Copyright (c) 1995-2004 Graham Barr. All rights reserved.
-This program is free software; you can redistribute it and/or modify it
-under the same terms as Perl itself.
+Copyright (C) 1995-2004 Graham Barr.  All rights reserved.
+
+Copyright (C) 2013-2017, 2020 Steve Hay.  All rights reserved.
+
+=head1 LICENCE
+
+This module is free software; you can redistribute it and/or modify it under the
+same terms as Perl itself, i.e. under the terms of either the GNU General Public
+License or the Artistic License, as specified in the F<LICENCE> file.
+
+=head1 VERSION
+
+Version 3.13
+
+=head1 DATE
+
+23 Dec 2020
+
+=head1 HISTORY
+
+See the F<Changes> file.
 
 =cut

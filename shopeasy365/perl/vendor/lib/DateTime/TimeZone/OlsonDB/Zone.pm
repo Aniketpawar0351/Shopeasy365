@@ -1,28 +1,20 @@
 package DateTime::TimeZone::OlsonDB::Zone;
-{
-  $DateTime::TimeZone::OlsonDB::Zone::VERSION = '1.57';
-}
 
 use strict;
 use warnings;
+use namespace::autoclean;
+
+our $VERSION = '2.46';
 
 use DateTime::TimeZone;
 use DateTime::TimeZone::OlsonDB;
 use DateTime::TimeZone::OlsonDB::Change;
 use DateTime::TimeZone::OlsonDB::Observance;
-
 use List::Util qw( first max );
-use Params::Validate qw( validate SCALAR ARRAYREF );
 
 sub new {
     my $class = shift;
-    my %p     = validate(
-        @_, {
-            name        => { type => SCALAR },
-            observances => { type => ARRAYREF },
-            olson_db    => 1,
-        }
-    );
+    my %p     = @_;
 
     my $self = {
         name           => $p{name},
@@ -55,6 +47,7 @@ sub expand_observances {
     my $max_year = shift;
 
     my $prev_until;
+    ## no critic (ControlStructures::ProhibitCStyleForLoops)
     for ( my $x = 0; $x < @{ $self->{observances} }; $x++ ) {
         my %p = %{ $self->{observances}[$x] };
 
@@ -73,19 +66,20 @@ sub expand_observances {
             last_offset_from_std => $last_offset_from_std,
         );
 
-        my $rule = $obs->first_rule;
-        my $letter = $rule ? $rule->letter : '';
+        my $rule   = $obs->first_rule;
+        my $letter = $rule ? $rule->letter : q{};
 
         my $change = DateTime::TimeZone::OlsonDB::Change->new(
             type                 => 'observance',
             utc_start_datetime   => $obs->utc_start_datetime,
             local_start_datetime => $obs->local_start_datetime,
-            short_name           => sprintf( $obs->format, $letter ),
+            short_name           => $obs->formatted_short_name($letter),
             observance           => $obs,
             $rule ? ( rule => $rule ) : (),
         );
 
         if ($DateTime::TimeZone::OlsonDB::DEBUG) {
+            ## no critic (InputOutput::RequireCheckedSyscalls)
             print "Adding observance change ...\n";
 
             $change->_debug_output;
@@ -121,6 +115,7 @@ sub add_change {
             && $self->{changes}[-1]->utc_start_datetime
             == $change->utc_start_datetime ) {
             if ( $self->{changes}[-1]->rule && $change->observance ) {
+                ## no critic (InputOutput::RequireCheckedSyscalls)
                 print
                     " Ignoring previous rule change, that starts the same time as current observance change\n\n"
                     if $DateTime::TimeZone::OlsonDB::DEBUG;
@@ -140,10 +135,11 @@ sub add_change {
             && $last_change->total_offset == $change->total_offset
             && $last_change->is_dst == $change->is_dst
             && $last_change->observance eq $change->observance ) {
-            my $last_rule = $last_change->rule || '';
-            my $new_rule  = $change->rule      || '';
+            my $last_rule = $last_change->rule || q{};
+            my $new_rule  = $change->rule      || q{};
 
             if ( $last_rule eq $new_rule ) {
+                ## no critic (InputOutput::RequireCheckedSyscalls)
                 print "Skipping identical change\n"
                     if $DateTime::TimeZone::OlsonDB::DEBUG;
 
@@ -155,7 +151,7 @@ sub add_change {
     }
     else {
         if ( $self->{earliest} ) {
-            die "There can only be one earliest time zone change!";
+            die 'There can only be one earliest time zone change!';
         }
         else {
             $self->{earliest} = $change;

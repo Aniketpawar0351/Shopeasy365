@@ -11,7 +11,7 @@ const
   cStoppedColor = clBtnFace;
   cErrorColor = Graphics.clRed;
 
-  cCompileDate = 'Jun 5th 2019';
+  cCompileDate = 'Apr 6th 2021';
   cr = #13#10;
 
 type
@@ -219,12 +219,12 @@ begin
     Config.BinaryNames.FileZilla := mi.ReadString('BinaryNames', 'FileZilla', 'filezillaserver.exe');
     Config.BinaryNames.FileZillaAdmin := mi.ReadString('BinaryNames', 'FileZillaAdmin', 'filezilla server interface.exe');
     Config.BinaryNames.Mercury := mi.ReadString('BinaryNames', 'Mercury', 'mercury.exe');
-    Config.BinaryNames.Tomcat := mi.ReadString('BinaryNames', 'Tomcat', 'tomcat7.exe');
+    Config.BinaryNames.Tomcat := mi.ReadString('BinaryNames', 'Tomcat', 'tomcat8.exe');
 
     Config.ServiceNames.Apache := mi.ReadString('ServiceNames', 'Apache', 'Apache2.4');
     Config.ServiceNames.MySQL := mi.ReadString('ServiceNames', 'MySQL', 'mysql');
     Config.ServiceNames.FileZilla := mi.ReadString('ServiceNames', 'FileZilla', 'FileZillaServer');
-    Config.ServiceNames.Tomcat := mi.ReadString('ServiceNames', 'Tomcat', 'Tomcat7');
+    Config.ServiceNames.Tomcat := mi.ReadString('ServiceNames', 'Tomcat', 'Tomcat');
 
     Config.ServicePorts.Apache := mi.ReadInteger('ServicePorts', 'Apache', 80);
     Config.ServicePorts.ApacheSSL := mi.ReadInteger('ServicePorts', 'ApacheSSL', 443);

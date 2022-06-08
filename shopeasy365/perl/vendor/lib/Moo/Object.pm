@@ -1,6 +1,7 @@
 package Moo::Object;
 
-use strictures 1;
+use Moo::_strictures;
+use Carp ();
 
 our %NO_BUILD;
 our %NO_DEMOLISH;
@@ -17,34 +18,28 @@ sub new {
       })->generate_method($class);
     }
   }
+  my $proto = $class->BUILDARGS(@_);
   $NO_BUILD{$class} and
-    return bless({ ref($_[0]) eq 'HASH' ? %{$_[0]} : @_ }, $class);
+    return bless({}, $class);
   $NO_BUILD{$class} = !$class->can('BUILD') unless exists $NO_BUILD{$class};
   $NO_BUILD{$class}
-    ? bless({ ref($_[0]) eq 'HASH' ? %{$_[0]} : @_ }, $class)
-    : do {
-        my $proto = ref($_[0]) eq 'HASH' ? $_[0] : { @_ };
-        bless({ %$proto }, $class)->BUILDALL($proto);
-      };
+    ? bless({}, $class)
+    : bless({}, $class)->BUILDALL($proto);
 }
 
 # Inlined into Method::Generate::Constructor::_generate_args() - keep in sync
 sub BUILDARGS {
-    my $class = shift;
-    if ( scalar @_ == 1 ) {
-        unless ( defined $_[0] && ref $_[0] eq 'HASH' ) {
-            die "Single parameters to new() must be a HASH ref"
-                ." data => ". $_[0] ."\n";
-        }
-        return { %{ $_[0] } };
-    }
-    elsif ( @_ % 2 ) {
-        die "The new() method for $class expects a hash reference or a key/value list."
-                . " You passed an odd number of arguments\n";
-    }
-    else {
-        return {@_};
-    }
+  my $class = shift;
+  scalar @_ == 1
+    ? ref $_[0] eq 'HASH'
+      ? { %{ $_[0] } }
+      : Carp::croak("Single parameters to new() must be a HASH ref"
+          . " data => ". $_[0])
+    : @_ % 2
+      ? Carp::croak("The new() method for $class expects a hash reference or a"
+          . " key/value list. You passed an odd number of arguments")
+      : {@_}
+  ;
 }
 
 sub BUILDALL {
@@ -64,9 +59,12 @@ sub DEMOLISHALL {
 }
 
 sub does {
-  require Role::Tiny;
-  { no warnings 'redefine'; *does = \&Role::Tiny::does_role }
-  goto &Role::Tiny::does_role;
+  return !!0
+    unless ($INC{'Moose/Role.pm'} || $INC{'Role/Tiny.pm'});
+  require Moo::Role;
+  my $does = Moo::Role->can("does_role");
+  { no warnings 'redefine'; *does = $does }
+  goto &$does;
 }
 
 # duplicated in Moo::Role

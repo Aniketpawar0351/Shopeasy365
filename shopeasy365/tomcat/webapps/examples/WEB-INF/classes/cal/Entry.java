@@ -14,12 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package cal;
 
 public class Entry {
 
-    String hour;
+    final String hour;
     String description;
 
     public Entry(String hour) {

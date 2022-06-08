@@ -9,6 +9,10 @@
 package XML::LibXSLT;
 
 use strict;
+use warnings;
+
+use 5.008;
+
 use vars qw($VERSION @ISA $USE_LIBXML_DATA_TYPES $MatchCB $ReadCB $OpenCB $CloseCB);
 
 sub REQUIRE_XML_LIBXML_ABI_VERSION { 2 }
@@ -25,7 +29,7 @@ use Carp;
 
 require Exporter;
 
-$VERSION = "1.80";
+$VERSION = '1.99';
 
 require DynaLoader;
 
@@ -228,7 +232,6 @@ sub _init_callbacks{
         $icb->register_callbacks( [$mcb, $ocb, $rcb, $ccb] );
     }
 
-    $self->lib_init_callbacks();
     $icb->init_callbacks();
 }
 
@@ -436,7 +439,6 @@ sub _init_callbacks {
     if ( defined $mcb and defined $ocb and defined $rcb and defined $ccb ) {
         $icb->register_callbacks( [$mcb, $ocb, $rcb, $ccb] );
     }
-    $self->XML::LibXSLT::lib_init_callbacks();
     $icb->init_callbacks();
 
     my $scb = $self->{XML_LIBXSLT_SECPREFS};
@@ -669,6 +671,14 @@ recursion and detecting it. If your stylesheet or XML file requires
 seriously deep recursion, this is the way to set it. Default value is
 250.
 
+=item max_vars
+
+  XML::LibXSLT->max_vars(100_000);
+
+This option sets the maximum number of variables for a stylesheet. If your
+stylesheet or XML file requires many variables, this is the way to increase
+their limit. Default value is system-specific and may vary.
+
 =item debug_callback
 
   XML::LibXSLT->debug_callback($subref);
@@ -766,6 +776,17 @@ To define XML::LibXSLT or XML::LibXSLT::Stylesheet specific input
 callbacks, reuse the XML::LibXML input callback API as described in
 L<XML::LibXML::InputCallback(3)>.
 
+=over 4
+
+=item input_callbacks($icb)
+
+Enable the callbacks in C<$icb> only for this XML::LibXSLT object.
+C<$icb> should be a C<XML::LibXML::InputCallback> object. This will
+call C<init_callbacks> and C<cleanup_callbacks> automatically during
+parsing or transformation.
+
+=back
+
 =head1 Security Callbacks
 
 To create security preferences for the transformation see
@@ -855,6 +876,13 @@ Returns the value of the C<media-type> attribute from
 C<xsl:output>. If this attribute is unspecified, the default media
 type is initially C<text/xml>. This default changes to C<text/html>
 under the same conditions as L<output_method>.
+
+=item input_callbacks($icb)
+
+Enable the callbacks in C<$icb> only for this stylesheet. C<$icb>
+should be a C<XML::LibXML::InputCallback> object. This will call
+C<init_callbacks> and C<cleanup_callbacks> automatically during
+transformation.
 
 =back
 
@@ -1038,7 +1066,7 @@ example, for libxslt.so.1.1.18, it will return 10118.
 
 =item XML::LibXSLT::HAVE_EXLT()
 
-Returns 1 if the module was compiled with libexslt, 0 otherwised.
+Returns 1 if the module was compiled with libexslt, 0 otherwise.
 
 =back
 

@@ -12,6 +12,12 @@ Imager::APIRef - Imager's C API - reference.
 
   i_color color;
   color.rgba.r = 255; color.rgba.g = 0; color.rgba.b = 255;
+  double x[] = { ... };
+  double y[] = { ... };
+  i_polygon_t poly;
+  poly.count = sizeof(x) / sizeof(*x);
+  poly.x = x;
+  poly.y = y;
 
 
   # Blit tools
@@ -22,6 +28,7 @@ Imager::APIRef - Imager's C API - reference.
   black.rgba.r = black.rgba.g = black.rgba.b = black.rgba.a = 0;
   i_fill_t *fill;
   i_img_dim x, y;
+  i_img_dim_u limit;
   printf("left %" i_DF "\n", i_DFc(x));
   printf("point (" i_DFp ")\n", i_DFcp(x, y));
 
@@ -38,6 +45,10 @@ Imager::APIRef - Imager's C API - reference.
   i_flood_cfill(im, 50, 50, fill);
   i_flood_fill_border(im, 50, 50, &color, &border);
   i_flood_cfill_border(im, 50, 50, fill, border);
+  i_poly_poly_aa(im, 1, &poly, mode, color);
+  i_poly_aa_m(im, count, x, y, mode, color);
+  i_poly_poly_aa_cfill(im, 1, &poly, mode, fill);
+  i_poly_aa_cfill(im, count, x, y, mode, fill);
 
   # Error handling
   im_clear_error(aIMCTX);
@@ -104,10 +115,17 @@ Imager::APIRef - Imager's C API - reference.
   int channels = i_img_getchannels(img);
   i_img_dim width = i_img_get_width(im);
   i_img_dim height = i_img_get_height(im);
+  i_color_model_t cm = i_img_color_model(im);
+  int alpha_channel;
+  int has_alpha = i_img_alpha_channel(im, &alpha_channel);
+  int color_channels = i_img_color_channels(im);
 
   # Image quantization
 
   # Logging
+
+  # mutex
+  i_mutex_t mutex;
 
   # Mutex functions
   i_mutex_t m = i_mutex_new();
@@ -368,6 +386,62 @@ as an opaque type.
 =for comment
 From: File imdatatypes.h
 
+=item i_poly_fill_mode_t
+
+Control how polygons are filled.  Has the following values:
+
+=over
+
+=item *
+
+C<i_pfm_evenodd> - simple even-odd fills.
+
+=item *
+
+C<i_pfm_nonzero> - non-zero winding rule fills.
+
+=back
+
+
+=for comment
+From: File imdatatypes.h
+
+=item i_polygon_t
+
+Represents a polygon.  Has the following members:
+
+=over
+
+=item *
+
+C<x>, C<y> - arrays of x and y locations of vertices.
+
+=item *
+
+C<count> - the number of entries in the C<x> and C<y> arrays.
+
+=back
+
+
+=for comment
+From: File imdatatypes.h
+
+=item im_context_t
+
+Imager's per-thread context.
+
+
+=for comment
+From: File imdatatypes.h
+
+=item im_slot_t
+
+Represents a slot in the context object.
+
+
+=for comment
+From: File imdatatypes.h
+
 =item i_img_dim
 
   i_img_dim x, y;
@@ -375,6 +449,54 @@ From: File imdatatypes.h
 A signed integer type that represents an image dimension or ordinate.
 
 May be larger than int on some platforms.
+
+
+=for comment
+From: File imdatatypes.h
+
+=item i_img_dim_u
+
+  i_img_dim_u limit;
+
+An unsigned variant of L</i_img_dim>.
+
+
+=for comment
+From: File imdatatypes.h
+
+=item i_color_model_t
+
+Returned by L</i_img_color_model(im)> to indicate the color model of
+the image.
+
+An enumerated type with the following possible values:
+
+=over
+
+=item *
+
+C<icm_unknown> - the image has no usable color data.  In future
+versions of Imager this will be returned in a few limited cases,
+eg. when the source image is CMYK and the user has requested no color
+translation is done.
+
+=item *
+
+C<icm_gray> - gray scale with no alpha channel.
+
+=item *
+
+C<icm_gray_alpha> - gray scale with an alpha channel.
+
+=item *
+
+C<icm_rgb> - RGB
+
+=item *
+
+C<icm_rgb_alpha> - RGB with an alpha channel.
+
+=back
 
 
 =for comment
@@ -770,6 +892,58 @@ Returns the number of pixels set.
 =for comment
 From: File imext.c
 
+=item i_poly_aa_cfill_m(im, count, x, y, mode, fill)
+
+  i_poly_aa_cfill(im, count, x, y, mode, fill);
+
+Fill a polygon defined by the points specified by the x and y arrays with
+the fill specified by C<fill>.
+
+
+=for comment
+From: File polygon.c
+
+=item i_poly_aa_m(im, count, x, y, mode, color)
+
+  i_poly_aa_m(im, count, x, y, mode, color);
+
+Fill a polygon defined by the points specified by the x and y arrays with
+the color specified by C<color>.
+
+
+=for comment
+From: File polygon.c
+
+=item i_poly_poly_aa(im, count, polys, mode, color)
+
+  i_poly_poly_aa(im, 1, &poly, mode, color);
+
+Fill the C<count> polygons defined by C<polys> the color specified by
+C<color>.
+
+At least one polygon must be supplied.
+
+All polygons must have at least 3 points.
+
+
+=for comment
+From: File polygon.c
+
+=item i_poly_poly_aa_cfill(im, count, polys, mode, fill)
+
+  i_poly_poly_aa_cfill(im, 1, &poly, mode, fill);
+
+Fill the C<count> polygons defined by C<polys> the fill specified by
+C<fill>.
+
+At least one polygon must be supplied.
+
+All polygons must have at least 3 points.
+
+
+=for comment
+From: File polygon.c
+
 =item i_ppal(im, left, right, y, indexes)
 
 
@@ -1103,7 +1277,7 @@ If C<cust_hatch> is NULL then one of the standard hatches is used.
 
 (C<dx>, C<dy>) are an offset into the hatch which can be used to hatch
 adjoining areas out of alignment, or to align the origin of a hatch
-with the the side of a filled area.
+with the side of a filled area.
 
 
 =for comment
@@ -1125,7 +1299,7 @@ If C<cust_hatch> is NULL then one of the standard hatches is used.
 
 (C<dx>, C<dy>) are an offset into the hatch which can be used to hatch
 adjoining areas out of alignment, or to align the origin of a hatch
-with the the side of a filled area.
+with the side of a filled area.
 
 
 =for comment
@@ -1265,7 +1439,7 @@ From: File iolayer.c
 X<io_new_fd API>X<im_io_new_fd API>
 
 Returns a new io_glue object that has the source defined as reading
-from specified file descriptor.  Note that the the interface to receiving
+from specified file descriptor.  Note that the interface to receiving
 data from the io_glue callbacks hasn't been done yet.
 
   ctx - and Imager context object
@@ -1707,14 +1881,49 @@ From: File image.c
 
 =over
 
-=item i_img_color_channels(C<im>)
+=item i_img_alpha_channel(im, &channel)
 
+  int alpha_channel;
+  int has_alpha = i_img_alpha_channel(im, &alpha_channel);
 
-The number of channels holding color information.
+Work out the alpha channel for an image.
+
+If the image has an alpha channel, sets C<*channel> to the alpha
+channel index and returns non-zero.
+
+If the image has no alpha channel, returns zero and C<*channel> is not
+modified.
+
+C<channel> may be C<NULL>.
 
 
 =for comment
-From: File immacros.h
+From: File image.c
+
+=item i_img_color_channels(im)
+
+  int color_channels = i_img_color_channels(im);
+
+Returns the number of color channels in the image.  For now this is
+always 1 (for grayscale) or 3 (for RGB) but may be 0 in some special
+cases in a future release of Imager.
+
+
+=for comment
+From: File image.c
+
+=item i_img_color_model(im)
+
+  i_color_model_t cm = i_img_color_model(im);
+
+Returns the color model for the image.
+
+A future version of Imager will allow for images with extra channels
+beyond gray/rgb and alpha.
+
+
+=for comment
+From: File image.c
 
 =item i_img_get_height(C<im>)
 
@@ -1880,6 +2089,24 @@ This is an internal function called by the mm_log() macro.
 
 =for comment
 From: File log.c
+
+
+=back
+
+=head2 mutex
+
+=over
+
+=item i_mutex_t
+X<i_mutex>
+
+  i_mutex_t mutex;
+
+Opaque type for Imager's mutex API.
+
+
+=for comment
+From: File imdatatypes.h
 
 
 =back
@@ -2326,6 +2553,25 @@ If reallocation of slot storage fails, returns false.
 
 =for comment
 From: File context.c
+
+=item im_decode_exif
+
+im_decode_exif(im, data_base, data_size);
+
+The data from C<data_base> for C<data_size> bytes will be scanned for
+EXIF data.
+
+Any data found will be used to set tags in the supplied image.
+
+The intent is that invalid EXIF data will simply fail to set tags, and
+write to the log.  In no case should this code exit when supplied
+invalid data.
+
+Returns true if an EXIF header was seen.
+
+
+=for comment
+From: File imexif.c
 
 =item im_errors(ctx)
 

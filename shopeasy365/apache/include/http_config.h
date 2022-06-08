@@ -786,7 +786,7 @@ AP_DECLARE(void) ap_remove_module(module *m);
 AP_DECLARE(const char *) ap_add_loaded_module(module *mod, apr_pool_t *p,
                                               const char *s);
 /**
- * Remove a module fromthe chained modules list and the list of loaded modules
+ * Remove a module from the chained modules list and the list of loaded modules
  * @param mod the module structure of the module to remove
  */
 AP_DECLARE(void) ap_remove_loaded_module(module *mod);
@@ -907,7 +907,7 @@ AP_DECLARE(const char *) ap_build_cont_config(apr_pool_t *p,
  * @param conf_pool The pconf pool
  * @param temp_pool The temporary pool
  * @param conftree Place to store the root node of the config tree
- * @return Error string on erro, NULL otherwise
+ * @return Error string on error, NULL otherwise
  * @note If conf_pool == temp_pool, ap_build_config() will assume .htaccess
  *       context and use a lower maximum line length.
  */
@@ -1069,7 +1069,7 @@ AP_DECLARE(void) ap_run_rewrite_args(process_rec *process);
 
 /**
  * Run the register hooks function for a specified module
- * @param m The module to run the register hooks function fo
+ * @param m The module to run the register hooks function from
  * @param p The pool valid for the lifetime of the module
  */
 AP_DECLARE(void) ap_register_hooks(module *m, apr_pool_t *p);
@@ -1298,6 +1298,7 @@ AP_CORE_DECLARE(void *) ap_set_config_vectors(server_rec *server,
  * Run the header parser functions for each module
  * @param r The current request
  * @return OK or DECLINED
+ * @ingroup hooks
  */
 AP_DECLARE_HOOK(int,header_parser,(request_rec *r))
 
@@ -1307,6 +1308,7 @@ AP_DECLARE_HOOK(int,header_parser,(request_rec *r))
  * @param plog The logging streams pool
  * @param ptemp The temporary pool
  * @return OK or DECLINED on success anything else is a error
+ * @ingroup hooks
  */
 AP_DECLARE_HOOK(int,pre_config,(apr_pool_t *pconf,apr_pool_t *plog,
                                 apr_pool_t *ptemp))
@@ -1318,6 +1320,7 @@ AP_DECLARE_HOOK(int,pre_config,(apr_pool_t *pconf,apr_pool_t *plog,
  * @param ptemp The temporary pool
  * @param s the server to operate upon
  * @return OK or DECLINED on success anything else is a error
+ * @ingroup hooks
  */
 AP_DECLARE_HOOK(int,check_config,(apr_pool_t *pconf, apr_pool_t *plog,
                                   apr_pool_t *ptemp, server_rec *s))
@@ -1330,17 +1333,28 @@ AP_DECLARE_HOOK(int,check_config,(apr_pool_t *pconf, apr_pool_t *plog,
  * @note To avoid reordering problems due to different buffering, hook
  *       functions should only apr_file_*() to print to stdout/stderr and
  *       not simple printf()/fprintf().
- *     
+ * @ingroup hooks
  */
 AP_DECLARE_HOOK(void,test_config,(apr_pool_t *pconf, server_rec *s))
 
 /**
  * Run the post_config function for each module
+ *
+ * The function might be called multiple times.  @a pconf, @a plog, and
+ * @a ptemp may be cleared and/or destroyed between calls.
+ *
+ * The function will be called zero or one times with the server's state being
+ * #AP_SQ_MS_CREATE_PRE_CONFIG, and will be called one or more times with
+ * the server's state being #AP_SQ_MS_CREATE_CONFIG.
+ *
+ * @see ap_state_query(), #AP_SQ_MAIN_STATE
+ *
  * @param pconf The config pool
  * @param plog The logging streams pool
  * @param ptemp The temporary pool
  * @param s The list of server_recs
  * @return OK or DECLINED on success anything else is a error
+ * @ingroup hooks
  */
 AP_DECLARE_HOOK(int,post_config,(apr_pool_t *pconf,apr_pool_t *plog,
                                  apr_pool_t *ptemp,server_rec *s))
@@ -1352,6 +1366,7 @@ AP_DECLARE_HOOK(int,post_config,(apr_pool_t *pconf,apr_pool_t *plog,
  * @param ptemp The temporary pool
  * @param s The list of server_recs
  * @return OK or DECLINED on success anything else is a error
+ * @ingroup hooks
  */
 AP_DECLARE_HOOK(int,open_logs,(apr_pool_t *pconf,apr_pool_t *plog,
                                apr_pool_t *ptemp,server_rec *s))
@@ -1360,6 +1375,7 @@ AP_DECLARE_HOOK(int,open_logs,(apr_pool_t *pconf,apr_pool_t *plog,
  * Run the child_init functions for each module
  * @param pchild The child pool
  * @param s The list of server_recs in this server
+ * @ingroup hooks
  */
 AP_DECLARE_HOOK(void,child_init,(apr_pool_t *pchild, server_rec *s))
 
@@ -1367,6 +1383,7 @@ AP_DECLARE_HOOK(void,child_init,(apr_pool_t *pchild, server_rec *s))
  * Run the handler functions for each module
  * @param r The request_rec
  * @remark non-wildcard handlers should HOOK_MIDDLE, wildcard HOOK_LAST
+ * @ingroup hooks
  */
 AP_DECLARE_HOOK(int,handler,(request_rec *r))
 
@@ -1380,6 +1397,7 @@ AP_DECLARE_HOOK(int,handler,(request_rec *r))
  * @param lookup_uri Controls whether the caller actually wants content or not.
  * lookup is set when the quick_handler is called out of
  * ap_sub_req_lookup_uri()
+ * @ingroup hooks
  */
 AP_DECLARE_HOOK(int,quick_handler,(request_rec *r, int lookup_uri))
 
@@ -1387,6 +1405,7 @@ AP_DECLARE_HOOK(int,quick_handler,(request_rec *r, int lookup_uri))
  * Retrieve the optional functions for each module.
  * This is run immediately before the server starts. Optional functions should
  * be registered during the hook registration phase.
+ * @ingroup hooks
  */
 AP_DECLARE_HOOK(void,optional_fn_retrieve,(void))
 
@@ -1403,6 +1422,7 @@ AP_DECLARE_HOOK(void,optional_fn_retrieve,(void))
  *         APR_ENOENT or APR_ENOTDIR if no htaccess file exists,
  *         AP_DECLINED to let later modules do the opening,
  *         any other error code on error.
+ * @ingroup hooks
  */
 AP_DECLARE_HOOK(apr_status_t,open_htaccess,
                 (request_rec *r, const char *dir_name, const char *access_name,

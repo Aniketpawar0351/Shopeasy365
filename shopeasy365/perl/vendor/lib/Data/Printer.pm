@@ -6,14 +6,17 @@ use Scalar::Util;
 use Sort::Naturally;
 use Carp qw(croak);
 use Clone::PP qw(clone);
+use Package::Stash;
 use if $] >= 5.010, 'Hash::Util::FieldHash' => qw(fieldhash);
 use if $] < 5.010, 'Hash::Util::FieldHash::Compat' => qw(fieldhash);
 use File::Spec;
 use File::HomeDir ();
 use Fcntl;
-use version 0.77 ();
+# This causes strangeness wrt UNIVERSAL on Perl 5.8 with some versions of version.pm.
+# Instead, we now require version in the VSTRING() method.
+# use version 0.77 ();
 
-our $VERSION = '0.35';
+our $VERSION = '0.40';
 
 BEGIN {
     if ($^O =~ /Win32/i) {
@@ -22,9 +25,7 @@ BEGIN {
     }
 }
 
-
 # defaults
-my $BREAK = "\n";
 my $properties = {
     'name'           => 'var',
     'indent'         => 4,
@@ -34,18 +35,22 @@ my $properties = {
     'sort_keys'      => 1,
     'deparse'        => 0,
     'hash_separator' => '   ',
+    'align_hash'     => 1,
     'separator'      => ',',
     'end_separator'  => 0,
     'show_tied'      => 1,
     'show_tainted'   => 1,
+    'show_unicode'   => 0,
     'show_weak'      => 1,
     'show_readonly'  => 0,
     'show_lvalue'    => 1,
     'print_escapes'  => 0,
+    'escape_chars'   => 'none',
     'quote_keys'     => 'auto',
+    'scalar_quotes'  => '"',
     'use_prototypes' => 1,
     'output'         => 'stderr',
-    'return_value'   => 'dump',       # also 'void' or 'pass'
+    'return_value'   => 'pass',       # also 'dump' or 'void'
     'colored'        => 'auto',       # also 0 or 1
     'caller_info'    => 0,
     'caller_message' => 'Printing in line __LINE__ of __FILENAME__:',
@@ -68,6 +73,7 @@ my $properties = {
         'caller_info' => 'bright_cyan',
         'weak'        => 'cyan',
         'tainted'     => 'red',
+        'unicode'     => 'bright_yellow',
         'escaped'     => 'bright_red',
         'unknown'     => 'bright_yellow on_blue',
     },
@@ -95,8 +101,8 @@ my $properties = {
         CODE    => [ \&CODE     ],
         GLOB    => [ \&GLOB     ],
         VSTRING => [ \&VSTRING  ],
-        LVALUE  => [ \&LVALUE ],
-        FORMAT  => [ \&FORMAT ],
+        LVALUE  => [ \&LVALUE   ],
+        FORMAT  => [ \&FORMAT   ],
         Regexp  => [ \&Regexp   ],
         -unknown=> [ \&_unknown ],
         -class  => [ \&_class   ],
@@ -104,7 +110,7 @@ my $properties = {
 
     _output          => *STDERR,     # used internally
     _current_indent  => 0,           # used internally
-    _linebreak       => \$BREAK,     # used internally
+    _linebreak       => "\n",        # used internally
     _seen            => {},          # used internally
     _seen_override   => {},          # used internally
     _depth           => 0,           # used internally
@@ -133,11 +139,12 @@ sub import {
         $properties = _merge( $args );
     }
 
-    my $exported = ($properties->{use_prototypes} ? \&p : \&np );
+    my $exported = ($properties->{use_prototypes} ? \&p : \&p_without_prototypes );
     my $imported = $properties->{alias} || 'p';
     my $caller = caller;
     no strict 'refs';
     *{"$caller\::$imported"} = $exported;
+    *{"$caller\::np"} = \&np;
 }
 
 
@@ -145,13 +152,18 @@ sub p (\[@$%&];%) {
     return _print_and_return( $_[0], _data_printer(!!defined wantarray, @_) );
 }
 
-# np() is a p() clone without prototypes.
+sub np (\[@$%&];%) {
+    my ($dump, $p) = _data_printer(1, @_);
+    return $dump;
+}
+
+# This is a p() clone without prototypes.
 # Just like regular Data::Dumper, this version
 # expects a reference as its first argument.
 # We make a single exception for when we only
 # get one argument, in which case we ref it
 # for the user and keep going.
-sub np  {
+sub p_without_prototypes  {
     my $item = shift;
 
     if (!ref $item && @_ == 0) {
@@ -197,15 +209,14 @@ sub _data_printer {
 
     croak 'When calling p() without prototypes, please pass arguments as references'
         unless ref $_[0];
-
     my ($item, %local_properties) = @_;
     local %ENV = %ENV;
-
     my $p = _merge(\%local_properties);
+
     unless ($p->{multiline}) {
-        $BREAK = ' ';
-        $p->{'indent'} = 0;
-        $p->{'index'}  = 0;
+        $p->{'_linebreak'} = ' ';
+        $p->{'indent'}     = 0;
+        $p->{'index'}      = 0;
     }
 
     # We disable colors if colored is set to false.
@@ -285,7 +296,7 @@ sub _p {
             }
         }
     }
-    
+
     if ( not $found ) {
         # if it's not a class and not a known core type, we must be in
         # a future perl with some type we're unaware of
@@ -318,17 +329,20 @@ sub SCALAR {
     if (not defined $$item) {
         $string .= colored('undef', $p->{color}->{'undef'});
     }
-    elsif (Scalar::Util::looks_like_number($$item)) {
+    elsif (_is_number($$item)) {
         $string .= colored($$item, $p->{color}->{'number'});
     }
     else {
         my $val = _escape_chars($$item, $p->{color}{string}, $p);
 
-        $string .= q["] . colored($val, $p->{color}->{'string'}) . q["];
+        $string .= $p->{scalar_quotes} . colored($val, $p->{color}->{'string'}) . $p->{scalar_quotes};
     }
 
     $string .= ' ' . colored('(TAINTED)', $p->{color}->{'tainted'})
         if $p->{show_tainted} and Scalar::Util::tainted($$item);
+
+    $string .= ' ' . colored('(U)', $p->{color}->{'unicode'})
+        if $p->{show_unicode} and utf8::is_utf8($$item);
 
     $p->{_tie} = ref tied $$item;
 
@@ -339,15 +353,61 @@ sub SCALAR {
     return $string;
 }
 
+sub _is_number {
+    my ($maybe_a_number) = @_;
+
+    # Scalar values that start from zero is strings, but not numbers.
+    # You can write `my $foo = 0123`, but then `$foo` will be 83,
+    # (numbers starting with zero is octal integers)
+    return '' if $maybe_a_number =~ /^-?0[0-9]/;
+
+    my $is_number = $maybe_a_number =~ m/
+        ^
+        -?          # number can start with minus, but can't start with plus
+                    # is scalar starts with plus it is not number
+
+        [0-9]+      # then there should be some numbers
+
+        ( \. [0-9]+ )?      # there can be decimal part, which is optional
+
+        ( e [+-] [0-9]+ )?  # then there can be optional exponential notation part
+        \z
+    /x;
+
+    return $is_number;
+}
+
 sub _escape_chars {
     my ($str, $orig_color, $p) = @_;
 
     $orig_color   = color( $orig_color );
     my $esc_color = color( $p->{color}{escaped} );
 
-    if ($p->{print_escapes}) {
-        $str =~ s/\e/$esc_color\\e$orig_color/g;
+    # if we're escaping everything then we don't need to keep swapping
+    # colors in and out, and we need to return right away because
+    # we no longer need to print_escapes
+    if ($p->{escape_chars} eq 'all') {
+        return $esc_color
+               . join('', map { sprintf '\x{%02x}', ord $_ } split //, $str)
+               . $orig_color
+    }
 
+    $str =~ s/\e/$esc_color\\e$orig_color/g if $p->{print_escapes};
+
+    if ($p->{escape_chars} eq 'nonascii') {
+        $str =~ s{([^\x{00}-\x{7f}]+)}{
+          $esc_color
+          . (join '', map { sprintf '\x{%02x}', ord $_ } split //, $1)
+          . $orig_color
+        }ge;
+    } elsif ($p->{escape_chars} eq 'nonlatin1') {
+        $str =~ s{([^\x{00}-\x{ff}]+)}{
+          $esc_color
+          . (join '', map { sprintf '\x{%02x}', ord $_ } split //, $1) . $orig_color
+        }ge;
+    }
+
+    if ($p->{print_escapes}) {
         my %escaped = (
             "\n" => '\n',
             "\r" => '\r',
@@ -379,7 +439,7 @@ sub ARRAY {
         $string .= '[]';
     }
     else {
-        $string .= "[$BREAK";
+        $string .= "[$p->{_linebreak}";
         $p->{_current_indent} += $p->{indent};
 
         foreach my $i (0 .. $#{$item} ) {
@@ -410,7 +470,7 @@ sub ARRAY {
             $string .= $p->{separator}
               if $i < $#{$item} || $p->{end_separator};
 
-            $string .= $BREAK;
+            $string .= $p->{_linebreak};
 
             my $size = 2 + length($i); # [10], [100], etc
             substr $p->{name}, -$size, $size, '';
@@ -470,7 +530,7 @@ sub HASH {
         $string .= '{}';
     }
     else {
-        $string .= "{$BREAK";
+        $string .= "{$p->{_linebreak}";
         $p->{_current_indent} += $p->{indent};
 
         my $total_keys  = scalar keys %$item;
@@ -507,7 +567,7 @@ sub HASH {
             };
 
             # length of the largest key is used for indenting
-            if ($multiline) {
+            if ($multiline and $p->{align_hash}) {
                 my $l = length $colored;
                 $len = $l if $l > $len;
             }
@@ -543,7 +603,7 @@ sub HASH {
             $string .= $p->{separator}
               if --$total_keys > 0 || $p->{end_separator};
 
-            $string .= $BREAK;
+            $string .= $p->{_linebreak};
 
             my $size = 2 + length($raw_key); # {foo}, {z}, etc
             substr $p->{name}, -$size, $size, '';
@@ -581,7 +641,9 @@ sub Regexp {
 
 sub VSTRING {
     my ($item, $p) = @_;
+    eval { require version };
     my $string = '';
+    # This will raise an error if we have version < 0.77;
     $string .= colored(version->declare($$item)->normal, $p->{color}->{'vstring'});
     return $string;
 }
@@ -589,7 +651,7 @@ sub VSTRING {
 sub FORMAT {
     my ($item, $p) = @_;
     my $string = '';
-    $string .= colored("FORMAT", $p->{color}->{'format'});
+    $string .= colored('FORMAT', $p->{color}->{'format'});
     return $string;
 }
 
@@ -652,7 +714,7 @@ sub GLOB {
 sub _unknown {
     my($item, $p) = @_;
     my $ref = ref $item;
-    
+
     my $string = '';
     $string = colored($ref, $p->{color}->{'unknown'});
     return $string;
@@ -664,7 +726,7 @@ sub _class {
 
     # if the user specified a method to use instead, we do that
     if ( $p->{class_method} and my $method = $item->can($p->{class_method}) ) {
-        return $method->($item, $p);
+        return $method->($item, $p) if ref $method eq 'CODE';
     }
 
     my $string = '';
@@ -682,8 +744,7 @@ sub _class {
     if ($p->{class}{expand} eq 'all'
         or $p->{class}{expand} >= $p->{class}{_depth}
     ) {
-        $string .= "  {$BREAK";
-
+        $string .= "  {$p->{_linebreak}";
         $p->{_current_indent} += $p->{indent};
 
         if ($] >= 5.010) {
@@ -691,32 +752,38 @@ sub _class {
         } else {
             require MRO::Compat;
         }
-        require Package::Stash;
 
-        my $stash = Package::Stash->new($ref);
+        # Package::Stash dies on blessed XS
+        eval {
+            my $stash = Package::Stash->new($ref);
 
-        if ( my @superclasses = @{$stash->get_symbol('@ISA')||[]} ) {
-            if ($p->{class}{parents}) {
-                $string .= (' ' x $p->{_current_indent})
-                        . 'Parents       '
-                        . join(', ', map { colored($_, $p->{color}->{'class'}) }
-                                     @superclasses
-                        ) . $BREAK;
+            if ( my @superclasses = @{$stash->get_symbol('@ISA')||[]} ) {
+                if ($p->{class}{parents}) {
+                    $string .= (' ' x $p->{_current_indent})
+                            . 'Parents       '
+                            . join(', ', map { colored($_, $p->{color}->{'class'}) }
+                                         @superclasses
+                            ) . $p->{_linebreak};
+                }
+
+                if ( $p->{class}{linear_isa} and
+                      (
+                        ($p->{class}{linear_isa} eq 'auto' and @superclasses > 1)
+                        or
+                        ($p->{class}{linear_isa} ne 'auto')
+                      )
+                ) {
+                    $string .= (' ' x $p->{_current_indent})
+                            . 'Linear @ISA   '
+                            . join(', ', map { colored( $_, $p->{color}->{'class'}) }
+                                      @{mro::get_linear_isa($ref)}
+                            ) . $p->{_linebreak};
+                }
             }
-
-            if ( $p->{class}{linear_isa} and
-                  (
-                    ($p->{class}{linear_isa} eq 'auto' and @superclasses > 1)
-                    or
-                    ($p->{class}{linear_isa} ne 'auto')
-                  )
-            ) {
-                $string .= (' ' x $p->{_current_indent})
-                        . 'Linear @ISA   '
-                        . join(', ', map { colored( $_, $p->{color}->{'class'}) }
-                                  @{mro::get_linear_isa($ref)}
-                        ) . $BREAK;
-            }
+        };
+        if ($@) {
+            warn "*** WARNING *** Could not get superclasses for $ref: $@"
+                unless $@ =~ / is not a module name at /;
         }
 
         $string .= _show_methods($ref, $p)
@@ -728,7 +795,7 @@ sub _class {
 
             local $p->{_reftype} = Scalar::Util::reftype $item;
             $string .= _p($item, $p);
-            $string .= $BREAK;
+            $string .= $p->{_linebreak};
         }
 
         $p->{_current_indent} -= $p->{indent};
@@ -792,11 +859,20 @@ sub _show_methods {
 
     my %seen_method_name;
 
+    # Package::Stash dies on blessed XS
+    my @all_methods = ();
+    eval {
+        @all_methods = map $methods_of->($_),
+                           @{mro::get_linear_isa($ref)},
+                           $p->{class}{universal} ? 'UNIVERSAL' : ()
+    };
+    if ($@) {
+        warn "*** WARNING *** Could not get all_methods for $ref: $@"
+           unless $@ =~ / is not a module name at /;
+    }
+
 METHOD:
-    foreach my $method (
-        map $methods_of->($_), @{mro::get_linear_isa($ref)},
-                               $p->{class}{universal} ? 'UNIVERSAL' : ()
-    ) {
+    foreach my $method (@all_methods) {
         my ($package_string, $method_string) = @$method;
 
         next METHOD if $seen_method_name{$method_string}++;
@@ -825,7 +901,7 @@ METHOD:
                  . (@list ? ' : ' : '')
                  . join(', ', map { colored($_, $p->{color}->{method}) }
                               @list
-                   ) . $BREAK;
+                   ) . $p->{_linebreak};
     }
 
     return $string;
@@ -853,7 +929,7 @@ sub _get_info_message {
     $message =~ s/\b__FILENAME__\b/$caller[1]/g;
     $message =~ s/\b__LINE__\b/$caller[2]/g;
 
-    return colored($message, $p->{color}{caller_info}) . $BREAK;
+    return colored($message, $p->{color}{caller_info}) . $p->{_linebreak};
 }
 
 
@@ -863,7 +939,11 @@ sub _merge {
 
     if ($p) {
         foreach my $key (keys %$p) {
-            if ($key eq 'color' or $key eq 'colour') {
+            if ($key eq 'as') {
+                $clone->{caller_info} = 1;
+                $clone->{caller_message} = $p->{$key};
+            }
+            elsif ($key eq 'color' or $key eq 'colour') {
                 my $color = $p->{$key};
                 if ( not ref $color or ref $color ne 'HASH' ) {
                     Carp::carp q['color' should be a HASH reference. Did you mean 'colored'?];
@@ -972,17 +1052,17 @@ sub _load_rc_file {
 
     my $mode = (stat $file )[2];
     if ($^O !~ /Win32/i && ($mode & 0020 || $mode & 0002) ) {
-        warn "rc file '$file' must NOT be writeable to other users. Skipping.\n";
+        warn "*** WARNING *** rc file '$file' must NOT be writeable to other users. Skipping.\n";
         return;
     }
 
     if ( -l $file || (!-f _) || -p _ || -S _ || -b _ || -c _ ) {
-        warn "rc file '$file' doesn't look like a plain file. Skipping.\n";
+        warn "*** WARNING *** rc file '$file' doesn't look like a plain file. Skipping.\n";
         return;
     }
 
     unless (-o $file) {
-        warn "rc file '$file' must be owned by your (effective) user. Skipping.\n";
+        warn "*** WARNING *** rc file '$file' must be owned by your (effective) user. Skipping.\n";
         return;
     }
 
@@ -993,29 +1073,29 @@ sub _load_rc_file {
 
         if( ${^TAINT} != 0 ) {
             if ( $args->{allow_tainted} ) {
-                warn "WARNING: Reading tainted file '$file' due to user override.\n";
+                warn "*** WARNING *** Reading tainted file '$file' due to user override.\n";
                 $rc_data =~ /(.+)/s; # very bad idea - god help you
                 $rc_data = $1;
             }
             else {
-                warn "taint mode on: skipping rc file '$file'.\n";
+                warn "*** WARNING *** taint mode on: skipping rc file '$file'.\n";
                 return;
             }
         }
 
         my $config = eval $rc_data;
         if ( $@ ) {
-            warn "Error loading $file: $@\n";
+            warn "*** WARNING *** Error loading $file: $@\n";
         }
         elsif (!ref $config or ref $config ne 'HASH') {
-            warn "Error loading $file: config file must return a hash reference\n";
+            warn "*** WARNING *** Error loading $file: config file must return a hash reference\n";
         }
         else {
             $properties = _merge( $config );
         }
     }
     else {
-        warn "error opening '$file': $!\n";
+        warn "*** WARNING *** error opening '$file': $!\n";
     }
 }
 
@@ -1035,7 +1115,7 @@ Want to see what's inside a variable in a complete, colored
 and human-friendly way?
 
   use Data::Printer;   # or just "use DDP" for short
-  
+
   p @array;            # no need to pass references
 
 Code above might output something like this (with colors!):
@@ -1078,7 +1158,7 @@ how to create filters, and general tips, just keep reading :) >>
 
 Oh, if you are just experimenting and/or don't want to use a
 configuration file, you can set all options during initialization,
-including coloring, identation and filters!
+including coloring, indentation and filters!
 
   use Data::Printer {
       color => {
@@ -1091,7 +1171,7 @@ including coloring, identation and filters!
       },
   };
 
-The first C<{}> block is just syntax sugar, you can safely ommit it
+The first C<{}> block is just syntax sugar, you can safely omit it
 if it makes things easier to read:
 
   use DDP colored => 1;
@@ -1131,7 +1211,7 @@ in a way they are suitable for being C<eval>'ed back in.
 The thing is, a lot of people keep using it (and similar ones,
 like Data::Dump) to print data structures and objects on screen
 for inspection and debugging, and while you B<can> use those
-modules for that, it doesn't mean mean you B<should>.
+modules for that, it doesn't mean you B<should>.
 
 This is where Data::Printer comes in. It is meant to do one thing
 and one thing only:
@@ -1147,7 +1227,7 @@ L<JSON>, or whatever. CPAN is full of such solutions!
 
 Once you load Data::Printer, the C<p()> function will be imported
 into your namespace and available to you. It will pretty-print
-into STDERR (or any other output target) whatever variabe you pass to it.
+into STDERR (or any other output target) whatever variable you pass to it.
 
 =head2 Changing output targets
 
@@ -1171,9 +1251,30 @@ several different places:
 
 =head2 Return Value
 
+As of version 0.36, Data::Printer's return value defaults to "pass-through",
+meaning it will dump the variable to STDERR (or wherever you set the output
+to) and will return the variable itself.
+
 If for whatever reason you want to mangle with the output string
-instead of printing it, you can simply ask for a return
+instead of printing it, you can either use the (also exported) C<np()>
+function which always returns the string to be printed:
+
+    use DDP;
+
+    # move to a string
+    my $string = np @some_array;
+
+    # send as a warning
+    warn np($some_string);
+
+    # output to STDOUT instead of STDERR
+    print np(%some_hash);
+
+
+or change the return value to 'dump' and ask for p()'s return value instead:
 value:
+
+  use DDP return_value => 'dump';
 
   # move to a string
   my $string = p @some_array;
@@ -1199,7 +1300,7 @@ available:
 
 =over 4
 
-=item * C<'dump'> (default):
+=item * C<'dump'>
 
     p %var;               # prints the dump to STDERR (void context)
     my $string = p %var;  # returns the dump *without* printing
@@ -1210,7 +1311,7 @@ available:
     my $string = p %var;  # $string is undef. Data still printed in STDERR
 
 
-=item * C<'pass'>:
+=item * C<'pass'> (default as of 0.36):
 
     p %var;               # prints the dump to STDERR, returns %var
     my %copy = p %var;    # %copy = %var. Data still printed in STDERR
@@ -1289,6 +1390,7 @@ customization options available, as shown below (with default values):
       name           => 'var',   # name to display on cyclic references
       indent         => 4,       # how many spaces in each indent
       hash_separator => '   ',   # what separates keys from values
+      align_hash     => 1,       # align values in hash
       colored        => 'auto',  # colorize output (1 for always, 0 for never)
       index          => 1,       # display array indices
       multiline      => 1,       # display in multiple lines (see note below)
@@ -1297,12 +1399,16 @@ customization options available, as shown below (with default values):
       deparse        => 0,       # use B::Deparse to expand (expose) subroutines
       show_tied      => 1,       # expose tied variables
       show_tainted   => 1,       # expose tainted variables
+      show_unicode   => 0,       # show unicode flag if it exists
       show_weak      => 1,       # expose weak references
       show_readonly  => 0,       # expose scalar variables marked as read-only
       show_lvalue    => 1,       # expose lvalue types
       print_escapes  => 0,       # print non-printable chars as "\n", "\t", etc.
+      escape_chars   => 'none',  # escape chars into \x{...} form.  Values are
+                                 # "none", "nonascii", "nonlatin1", "all"
       quote_keys     => 'auto',  # quote hash keys (1 for always, 0 for never).
                                  # 'auto' will quote when key is empty/space-only.
+      scalar_quotes  => '"',     # the quote symbols to enclose scalar values
       separator      => ',',     # uses ',' to separate array/hash elements
       end_separator  => 0,       # prints the separator after last element in array/hash.
                                  # the default is 0 that means not to print
@@ -1587,6 +1693,12 @@ You can't pass more than one variable at a time.
    p($foo);       # right
    p($bar);       # right
 
+You can't use it in variable declarations (it will most likely not do what
+you want):
+
+    p my @array = qw(a b c d);         # wrong
+    my @array = qw(a b c d); p @array; # right
+
 The default mode is to use prototypes, in which you are supposed to pass
 variables, not anonymous structures:
 
@@ -1826,7 +1938,7 @@ To turn Data::Printer's output into HTML, you can do something like:
 
   use HTML::FromANSI;
   use Data::Printer;
-  
+
   my $html_output = ansi2html( p($object, colored => 1) );
 
 In the example above, the C<$html_output> variable contains the
@@ -1986,6 +2098,8 @@ with patches, bug reports, wishlists, comments and tests. They are
 
 =over 4
 
+=item * Adam Rosenstein
+
 =item * Allan Whiteford
 
 =item * Andreas König
@@ -1994,11 +2108,23 @@ with patches, bug reports, wishlists, comments and tests. They are
 
 =item * Árpád Szász
 
+=item * Athanasios Douitsis (aduitsis)
+
+=item * Baldur Kristinsson
+
 =item * brian d foy
+
+=item * Chad Granum (exodist)
 
 =item * Chris Prather (perigrin)
 
+=item * Dave Mitchell
+
+=item * David D Lowe (Flimm)
+
 =item * David Golden (xdg)
+
+=item * David Precious (bigpresh)
 
 =item * David Raab
 
@@ -2016,13 +2142,21 @@ with patches, bug reports, wishlists, comments and tests. They are
 
 =item * Fitz Elliott
 
+=item * Frew Schmidt (frew)
+
 =item * Ivan Bessarabov (bessarabv)
 
 =item * J Mash
 
+=item * Jay Allen (jayallen)
+
 =item * Jesse Luehrs (doy)
 
+=item * Jim Keenan (jkeenan)
+
 =item * Joel Berger (jberger)
+
+=item * John S. Anderson (genehack)
 
 =item * Kartik Thakore (kthakore)
 
@@ -2034,19 +2168,37 @@ with patches, bug reports, wishlists, comments and tests. They are
 
 =item * Marcel Grünauer (hanekomu)
 
+=item * Marco Masetti (grubert65)
+
+=item * Mark Fowler (Trelane)
+
 =item * Matt S. Trout (mst)
 
 =item * Maxim Vuets
 
+=item * Michael Conrad
+
 =item * Mike Doherty (doherty)
 
+=item * Nuba Princigalli (nuba)
+
+=item * Olaf Alders (oalders)
+
 =item * Paul Evans (LeoNerd)
+
+=item * Pedro Melo (melo)
 
 =item * Przemysław Wesołek (jest)
 
 =item * Rebecca Turner (iarna)
 
+=item * Renato Cron (renatoCRON)
+
+=item * Ricardo Signes (rjbs)
+
 =item * Rob Hoelz (hoelzro)
+
+=item * sawyer
 
 =item * Sebastian Willing (Sewi)
 
@@ -2060,13 +2212,21 @@ with patches, bug reports, wishlists, comments and tests. They are
 
 =item * Tatsuhiko Miyagawa (miyagawa)
 
+=item * Thomas Sibley (tsibley)
+
 =item * Tim Heaney (oylenshpeegul)
 
 =item * Torsten Raudssus (Getty)
 
+=item * Tokuhiro Matsuno (tokuhirom)
+
+=item * vividsnow
+
 =item * Wesley Dal`Col (blabos)
 
 =item * Yanick Champoux (yanick)
+
+=item * Zefram
 
 =back
 
@@ -2075,7 +2235,7 @@ If I missed your name, please drop me a line!
 
 =head1 LICENSE AND COPYRIGHT
 
-Copyright 2011 Breno G. de Oliveira C<< <garu at cpan.org> >>. All rights reserved.
+Copyright 2011-2017 Breno G. de Oliveira C<< <garu at cpan.org> >>. All rights reserved.
 
 This module is free software; you can redistribute it and/or modify it
 under the same terms as Perl itself. See L<perlartistic>.
@@ -2104,6 +2264,3 @@ RENDERED INACCURATE OR LOSSES SUSTAINED BY YOU OR THIRD PARTIES OR A
 FAILURE OF THE SOFTWARE TO OPERATE WITH ANY OTHER SOFTWARE), EVEN IF
 SUCH HOLDER OR OTHER PARTY HAS BEEN ADVISED OF THE POSSIBILITY OF
 SUCH DAMAGES.
-
-
-

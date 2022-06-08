@@ -2,6 +2,7 @@
 /**
  * `VALUES` keyword parser.
  */
+
 declare(strict_types=1);
 
 namespace PhpMyAdmin\SqlParser\Components;
@@ -12,8 +13,13 @@ use PhpMyAdmin\SqlParser\Token;
 use PhpMyAdmin\SqlParser\TokensList;
 use PhpMyAdmin\SqlParser\Translator;
 
+use function count;
+use function sprintf;
+
 /**
  * `VALUES` keyword parser.
+ *
+ * @final
  */
 class Array2d extends Component
 {
@@ -73,40 +79,38 @@ class Array2d extends Component
             }
 
             if ($state === 0) {
-                if ($token->value === '(') {
-                    $arr = ArrayObj::parse($parser, $list, $options);
-                    $arrCount = count($arr->values);
-                    if ($count === -1) {
-                        $count = $arrCount;
-                    } elseif ($arrCount !== $count) {
-                        $parser->error(
-                            sprintf(
-                                Translator::gettext('%1$d values were expected, but found %2$d.'),
-                                $count,
-                                $arrCount
-                            ),
-                            $token
-                        );
-                    }
-                    $ret[] = $arr;
-                    $state = 1;
-                } else {
+                if ($token->value !== '(') {
                     break;
                 }
+
+                $arr = ArrayObj::parse($parser, $list, $options);
+                $arrCount = count($arr->values);
+                if ($count === -1) {
+                    $count = $arrCount;
+                } elseif ($arrCount !== $count) {
+                    $parser->error(
+                        sprintf(
+                            Translator::gettext('%1$d values were expected, but found %2$d.'),
+                            $count,
+                            $arrCount
+                        ),
+                        $token
+                    );
+                }
+
+                $ret[] = $arr;
+                $state = 1;
             } elseif ($state === 1) {
-                if ($token->value === ',') {
-                    $state = 0;
-                } else {
+                if ($token->value !== ',') {
                     break;
                 }
+
+                $state = 0;
             }
         }
 
         if ($state === 0) {
-            $parser->error(
-                'An opening bracket followed by a set of values was expected.',
-                $list->tokens[$list->idx]
-            );
+            $parser->error('An opening bracket followed by a set of values was expected.', $list->tokens[$list->idx]);
         }
 
         --$list->idx;

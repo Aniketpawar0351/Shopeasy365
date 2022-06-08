@@ -32,6 +32,11 @@ environment variable.
 # for PAR internal use only!
 our $PARTemp;
 
+# name of the canary file
+our $Canary = "_CANARY_.txt";
+# how much to "date back" the canary file (in seconds)
+our $CanaryDateBack = 24 * 3600;        # 1 day
+
 # The C version of this code appears in myldr/mktmpdir.c
 # This code also lives in PAR::Packer's par.pl as _set_par_temp!
 sub set_par_temp_env {
@@ -48,19 +53,13 @@ sub set_par_temp_env {
 
     require File::Spec;
       if (!$ENV{PAR_CLEAN} and my $mtime = (stat($PAR::SetupProgname::Progname))[9]) {
-          my $ctx = _get_digester();
+          require Digest::SHA;
+          my $ctx = Digest::SHA->new(1);
 
-          # Workaround for bug in Digest::SHA 5.38 and 5.39
-          my $sha_version = eval { $Digest::SHA::VERSION } || 0;
-          if ($sha_version eq '5.38' or $sha_version eq '5.39') {
-              $ctx->addfile($PAR::SetupProgname::Progname, "b") if ($ctx);
-          }
-          else {
-              if ($ctx and open(my $fh, "<$PAR::SetupProgname::Progname")) {
-                  binmode($fh);
-                  $ctx->addfile($fh);
-                  close($fh);
-              }
+          if ($ctx and open(my $fh, "<$PAR::SetupProgname::Progname")) {
+              binmode($fh);
+              $ctx->addfile($fh);
+              close($fh);
           }
 
           $stmpdir = File::Spec->catdir(
@@ -154,8 +153,6 @@ __END__
 
 =head1 SEE ALSO
 
-The PAR homepage at L<http://par.perl.org>.
-
 L<PAR>, L<PAR::Environment>
 
 =head1 AUTHORS
@@ -163,7 +160,7 @@ L<PAR>, L<PAR::Environment>
 Audrey Tang E<lt>cpan@audreyt.orgE<gt>,
 Steffen Mueller E<lt>smueller@cpan.orgE<gt>
 
-L<http://par.perl.org/> is the official PAR website.  You can write
+You can write
 to the mailing list at E<lt>par@perl.orgE<gt>, or send an empty mail to
 E<lt>par-subscribe@perl.orgE<gt> to participate in the discussion.
 
@@ -180,7 +177,7 @@ Copyright 2006-2010 by Steffen Mueller E<lt>smueller@cpan.orgE<gt>.
 This program is free software; you can redistribute it and/or modify it
 under the same terms as Perl itself.
 
-See L<http://www.perl.com/perl/misc/Artistic.html>
+See F<LICENSE>.
 
 =cut
 

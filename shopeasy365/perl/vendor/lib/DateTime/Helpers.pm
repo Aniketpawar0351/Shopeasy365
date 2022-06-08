@@ -1,13 +1,13 @@
 package DateTime::Helpers;
-{
-  $DateTime::Helpers::VERSION = '0.78';
-}
 
 use strict;
 use warnings;
 
+our $VERSION = '1.54';
+
 use Scalar::Util ();
 
+## no critic (Subroutines::ProhibitBuiltinHomonyms)
 sub can {
     my $object = shift;
     my $method = shift;

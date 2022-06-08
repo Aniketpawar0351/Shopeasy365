@@ -3,7 +3,7 @@
 # See AutoSplit.pm.
 package Net::SSLeay;
 
-#line 879 "blib\lib\Net\SSLeay.pm (autosplit into blib\lib\auto\Net\SSLeay\randomize.al)"
+#line 971 "blib\lib\Net\SSLeay.pm (autosplit into blib\lib\auto\Net\SSLeay\randomize.al)"
 ### Arrange some randomness for eay PRNG
 
 sub randomize (;$$$) {
@@ -23,7 +23,6 @@ sub randomize (;$$$) {
     RAND_load_file($rn_seed_file, -s _) if $rnsf;
     RAND_seed($seed) if $seed;
     RAND_seed($ENV{RND_SEED}) if $ENV{RND_SEED};
-    RAND_egd($egd_path) if -e $egd_path && -S _;
     RAND_load_file($Net::SSLeay::random_device, $Net::SSLeay::how_random/8)
 	if -r $Net::SSLeay::random_device;
 }

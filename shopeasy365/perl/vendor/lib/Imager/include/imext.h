@@ -155,6 +155,11 @@ extern im_ext_funcs *imager_function_ext_table;
 #define i_flood_fill_border(im, seedx, seedy, dcol, border) ((im_extt->f_i_flood_fill_border)((im), (seedx), (seedy), (dcol), (border)))
 #define i_flood_cfill_border(im, seedx, seedy, fill, border) ((im_extt->f_i_flood_cfill_border)((im), (seedx), (seedy), (fill), (border)))
 
+#define i_poly_aa_m(im, count, x, y, mode, c) ((im_extt->f_i_poly_aa_m)((im), (count), (x), (y), (mode), (c)))
+#define i_poly_aa_cfill_m(im, count, x, y, mode, fill) ((im_extt->f_i_poly_aa_m)((im), (count), (x), (y), (mode), (fill)))
+#define i_poly_poly_aa(im, count, polys, mode, c) ((im_extt->f_i_poly_poly_aa)((im), (count), (polys), (mode), (c)))
+#define i_poly_poly_aa_cfill(im, count, polys, mode, fill) ((im_extt->f_i_poly_poly_aa_cfill)((im), (count), (polys), (mode), (fill)))
+
 #define i_copyto(im, src, x1, y1, x2, y2, tx, ty) \
   ((im_extt->f_i_copyto)((im), (src), (x1), (y1), (x2), (y2), (tx), (ty)))
 #define i_copyto_trans(im, src, x1, y1, x2, y2, tx, ty, trans) \
@@ -237,6 +242,12 @@ extern im_ext_funcs *imager_function_ext_table;
 #define im_context_slot_set(ctx, slot, value) ((im_extt->f_im_context_slot_set)((ctx), (slot), (value)))
 
 #define im_push_errorf (im_extt->f_im_push_errorf)
+
+#define i_img_alpha_channel(im, channel) ((im_extt->f_i_img_alpha_channel)((im), (channel)))
+#define i_img_color_model(im) ((im_extt->f_i_img_color_model)((im)))
+#define i_img_color_channels(im) ((im_extt->f_i_img_color_channels)((im)))
+
+#define im_decode_exif(im, data, len) ((im_extt->f_im_decode_exif)((im), (data), (len)))
 
 #ifdef IMAGER_LOG
 #ifndef IMAGER_NO_CONTEXT

@@ -67,6 +67,10 @@ E<lt>meta> elements containing a C<charset> attribute will result in
 an C<X-Meta-Charset> header, using the value of the C<charset>
 attribute as the pushed header value.
 
+The ':' character can't be represented in header field names, so
+if the meta element contains this char it's substituted with '-'
+before forming the field name.
+
 =back
 
 =head1 METHODS
@@ -80,14 +84,14 @@ superclass) are available:
 
 
 require HTML::Parser;
-@ISA = qw(HTML::Parser);
+our @ISA = qw(HTML::Parser);
 
 use HTML::Entities ();
 
 use strict;
-use vars qw($VERSION $DEBUG);
+use vars qw($DEBUG);
 #$DEBUG = 1;
-$VERSION = "3.69";
+our $VERSION = '3.75';
 
 =item $hp = HTML::HeadParser->new
 
@@ -204,6 +208,7 @@ sub start
 		return;
 	    }
 	}
+	$key =~ s/:/-/g;
 	$self->{'header'}->push_header($key => $attr->{content});
     } elsif ($tag eq 'base') {
 	return unless exists $attr->{href};
@@ -307,4 +312,3 @@ This library is free software; you can redistribute it and/or
 modify it under the same terms as Perl itself.
 
 =cut
-

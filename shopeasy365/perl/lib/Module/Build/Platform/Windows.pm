@@ -1,19 +1,17 @@
 package Module::Build::Platform::Windows;
 
 use strict;
-use vars qw($VERSION);
-$VERSION = '0.4003';
+use warnings;
+our $VERSION = '0.4231';
 $VERSION = eval $VERSION;
 
 use Config;
 use File::Basename;
 use File::Spec;
-use IO::File;
 
 use Module::Build::Base;
 
-use vars qw(@ISA);
-@ISA = qw(Module::Build::Base);
+our @ISA = qw(Module::Build::Base);
 
 
 sub manpage_separator {
@@ -49,7 +47,7 @@ sub ACTION_realclean {
       my $null_arg = (Win32::IsWinNT()) ? '""' : '';
       my $cmd = qq(start $null_arg /min "\%comspec\%" /c del "$full_progname");
 
-      my $fh = IO::File->new(">> $basename.bat")
+      open(my $fh, '>>', "$basename.bat")
         or die "Can't create $basename.bat: $!";
       print $fh $cmd;
       close $fh ;
@@ -89,90 +87,11 @@ sub make_executable {
   }
 }
 
-# This routine was copied almost verbatim from the 'pl2bat' utility
-# distributed with perl. It requires too much voodoo with shell quoting
-# differences and shortcomings between the various flavors of Windows
-# to reliably shell out
 sub pl2bat {
   my $self = shift;
   my %opts = @_;
-
-  # NOTE: %0 is already enclosed in doublequotes by cmd.exe, as appropriate
-  $opts{ntargs}    = '-x -S %0 %*' unless exists $opts{ntargs};
-  $opts{otherargs} = '-x -S "%0" %1 %2 %3 %4 %5 %6 %7 %8 %9' unless exists $opts{otherargs};
-
-  $opts{stripsuffix} = '/\\.plx?/' unless exists $opts{stripsuffix};
-  $opts{stripsuffix} = ($opts{stripsuffix} =~ m{^/([^/]*[^/\$]|)\$?/?$} ? $1 : "\Q$opts{stripsuffix}\E");
-
-  unless (exists $opts{out}) {
-    $opts{out} = $opts{in};
-    $opts{out} =~ s/$opts{stripsuffix}$//oi;
-    $opts{out} .= '.bat' unless $opts{in} =~ /\.bat$/i or $opts{in} =~ /^-$/;
-  }
-
-  my $head = <<EOT;
-    \@rem = '--*-Perl-*--
-    \@echo off
-    if "%OS%" == "Windows_NT" goto WinNT
-    perl $opts{otherargs}
-    goto endofperl
-    :WinNT
-    perl $opts{ntargs}
-    if NOT "%COMSPEC%" == "%SystemRoot%\\system32\\cmd.exe" goto endofperl
-    if %errorlevel% == 9009 echo You do not have Perl in your PATH.
-    if errorlevel 1 goto script_failed_so_exit_with_non_zero_val 2>nul
-    goto endofperl
-    \@rem ';
-EOT
-
-  $head =~ s/^\s+//gm;
-  my $headlines = 2 + ($head =~ tr/\n/\n/);
-  my $tail = "\n__END__\n:endofperl\n";
-
-  my $linedone  = 0;
-  my $taildone  = 0;
-  my $linenum   = 0;
-  my $skiplines = 0;
-
-  my $start = $Config{startperl};
-  $start = "#!perl" unless $start =~ /^#!.*perl/;
-
-  my $in = IO::File->new("< $opts{in}") or die "Can't open $opts{in}: $!";
-  my @file = <$in>;
-  $in->close;
-
-  foreach my $line ( @file ) {
-    $linenum++;
-    if ( $line =~ /^:endofperl\b/ ) {
-      if (!exists $opts{update}) {
-        warn "$opts{in} has already been converted to a batch file!\n";
-        return;
-      }
-      $taildone++;
-    }
-    if ( not $linedone and $line =~ /^#!.*perl/ ) {
-      if (exists $opts{update}) {
-        $skiplines = $linenum - 1;
-        $line .= "#line ".(1+$headlines)."\n";
-      } else {
-	$line .= "#line ".($linenum+$headlines)."\n";
-      }
-	$linedone++;
-    }
-    if ( $line =~ /^#\s*line\b/ and $linenum == 2 + $skiplines ) {
-      $line = "";
-    }
-  }
-
-  my $out = IO::File->new("> $opts{out}") or die "Can't open $opts{out}: $!";
-  print $out $head;
-  print $out $start, ( $opts{usewarnings} ? " -w" : "" ),
-             "\n#line ", ($headlines+1), "\n" unless $linedone;
-  print $out @file[$skiplines..$#file];
-  print $out $tail unless $taildone;
-  $out->close;
-
-  return $opts{out};
+  require ExtUtils::PL2Bat;
+  return ExtUtils::PL2Bat::pl2bat(%opts);
 }
 
 
@@ -210,50 +129,45 @@ sub split_like_shell {
 
   (my $self, local $_) = @_;
 
-  return @$_ if defined() && UNIVERSAL::isa($_, 'ARRAY');
+  return @$_ if defined() && ref() eq 'ARRAY';
 
   my @argv;
   return @argv unless defined() && length();
 
-  my $arg = '';
-  my( $i, $quote_mode ) = ( 0, 0 );
+  my $length = length;
+  m/\G\s*/gc;
 
-  while ( $i < length() ) {
-
-    my $ch      = substr( $_, $i  , 1 );
-    my $next_ch = substr( $_, $i+1, 1 );
-
-    if ( $ch eq '\\' && $next_ch eq '"' ) {
-      $arg .= '"';
-      $i++;
-    } elsif ( $ch eq '\\' && $next_ch eq '\\' ) {
-      $arg .= '\\';
-      $i++;
-    } elsif ( $ch eq '"' && $next_ch eq '"' && $quote_mode ) {
-      $quote_mode = !$quote_mode;
-      $arg .= '"';
-      $i++;
-    } elsif ( $ch eq '"' && $next_ch eq '"' && !$quote_mode &&
-	      ( $i + 2 == length()  ||
-		substr( $_, $i + 2, 1 ) eq ' ' )
-	    ) { # for cases like: a"" => [ 'a' ]
-      push( @argv, $arg );
-      $arg = '';
-      $i += 2;
-    } elsif ( $ch eq '"' ) {
-      $quote_mode = !$quote_mode;
-    } elsif ( $ch eq ' ' && !$quote_mode ) {
-      push( @argv, $arg ) if $arg;
-      $arg = '';
-      ++$i while substr( $_, $i + 1, 1 ) eq ' ';
-    } else {
-      $arg .= $ch;
+  ARGS: until ( pos == $length ) {
+    my $quote_mode;
+    my $arg = '';
+    CHARS: until ( pos == $length ) {
+      if ( m/\G((?:\\\\)+)(?=\\?(")?)/gc ) {
+          if (defined $2) {
+              $arg .= '\\' x (length($1) / 2);
+          }
+          else {
+              $arg .= $1;
+          }
+      }
+      elsif ( m/\G\\"/gc ) {
+        $arg .= '"';
+      }
+      elsif ( m/\G"/gc ) {
+        if ( $quote_mode && m/\G"/gc ) {
+            $arg .= '"';
+        }
+        $quote_mode = !$quote_mode;
+      }
+      elsif ( !$quote_mode && m/\G\s+/gc ) {
+        last;
+      }
+      elsif ( m/\G(.)/sgc ) {
+        $arg .= $1;
+      }
     }
-
-    $i++;
+    push @argv, $arg;
   }
 
-  push( @argv, $arg ) if defined( $arg ) && length( $arg );
   return @argv;
 }
 

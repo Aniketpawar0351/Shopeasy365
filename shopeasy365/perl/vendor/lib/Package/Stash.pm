@@ -1,15 +1,10 @@
-package Package::Stash;
-BEGIN {
-  $Package::Stash::AUTHORITY = 'cpan:DOY';
-}
-{
-  $Package::Stash::VERSION = '0.34';
-}
+package Package::Stash; # git description: v0.38-23-gce01289
 use strict;
 use warnings;
 use 5.008001;
-# ABSTRACT: routines for manipulating stashes
+# ABSTRACT: Routines for manipulating stashes
 
+our $VERSION = '0.39';
 our $IMPLEMENTATION;
 
 use Module::Implementation 0.06;
@@ -19,78 +14,37 @@ BEGIN {
       if ( $IMPLEMENTATION and not $ENV{PACKAGE_STASH_IMPLEMENTATION} );
 
     Module::Implementation::build_loader_sub(
-        implementations => [ 'XS', 'PP' ]
+        implementations => [ 'XS', 'PP' ],
+        symbols         => [qw(
+            new
+            name
+            namespace
+            add_symbol
+            remove_glob
+            has_symbol
+            get_symbol
+            get_or_add_symbol
+            remove_symbol
+            list_all_symbols
+            get_all_symbols
+        )],
     )->();
     $IMPLEMENTATION = Module::Implementation::implementation_for(__PACKAGE__);
-
-    my $impl = "Package::Stash::$IMPLEMENTATION";
-    my $from = $impl->new($impl);
-    my $to = $impl->new(__PACKAGE__);
-    my $methods = $from->get_all_symbols('CODE');
-    for my $meth (keys %$methods) {
-        $to->add_symbol("&$meth" => $methods->{$meth});
-    }
 }
-
-use Package::DeprecationManager -deprecations => {
-    'Package::Stash::add_package_symbol'        => 0.14,
-    'Package::Stash::remove_package_glob'       => 0.14,
-    'Package::Stash::has_package_symbol'        => 0.14,
-    'Package::Stash::get_package_symbol'        => 0.14,
-    'Package::Stash::get_or_add_package_symbol' => 0.14,
-    'Package::Stash::remove_package_symbol'     => 0.14,
-    'Package::Stash::list_all_package_symbols'  => 0.14,
-};
-
-sub add_package_symbol {
-    deprecated('add_package_symbol is deprecated, please use add_symbol');
-    shift->add_symbol(@_);
-}
-
-sub remove_package_glob {
-    deprecated('remove_package_glob is deprecated, please use remove_glob');
-    shift->remove_glob(@_);
-}
-
-sub has_package_symbol {
-    deprecated('has_package_symbol is deprecated, please use has_symbol');
-    shift->has_symbol(@_);
-}
-
-sub get_package_symbol {
-    deprecated('get_package_symbol is deprecated, please use get_symbol');
-    shift->get_symbol(@_);
-}
-
-sub get_or_add_package_symbol {
-    deprecated('get_or_add_package_symbol is deprecated, please use get_or_add_symbol');
-    shift->get_or_add_symbol(@_);
-}
-
-sub remove_package_symbol {
-    deprecated('remove_package_symbol is deprecated, please use remove_symbol');
-    shift->remove_symbol(@_);
-}
-
-sub list_all_package_symbols {
-    deprecated('list_all_package_symbols is deprecated, please use list_all_symbols');
-    shift->list_all_symbols(@_);
-}
-
-
-1;
 
 __END__
 
 =pod
 
+=encoding UTF-8
+
 =head1 NAME
 
-Package::Stash - routines for manipulating stashes
+Package::Stash - Routines for manipulating stashes
 
 =head1 VERSION
 
-version 0.34
+version 0.39
 
 =head1 SYNOPSIS
 
@@ -156,11 +110,6 @@ hash is updated to record the values of C<filename>, C<first_line_num>, and
 C<last_line_num> for the subroutine. If these are not passed, their values are
 inferred (as much as possible) from C<caller> information.
 
-This is especially useful for debuggers and profilers, which use C<%DB::sub> to
-determine where the source code for a subroutine can be found.  See
-L<http://perldoc.perl.org/perldebguts.html#Debugger-Internals> for more
-information about C<%DB::sub>.
-
 =head2 remove_glob $name
 
 Removes all package variables with the given name, regardless of sigil.
@@ -200,6 +149,77 @@ C<$type_filter> is passed, the hash will contain every variable of that type in
 the package as values, otherwise, it will contain the typeglobs corresponding
 to the variable names (basically, a clone of the stash).
 
+=for stopwords profilers
+
+This is especially useful for debuggers and profilers, which use C<%DB::sub> to
+determine where the source code for a subroutine can be found.  See
+L<http://perldoc.perl.org/perldebguts.html#Debugger-Internals> for more
+information about C<%DB::sub>.
+
+=head1 WORKING WITH VARIABLES
+
+It is important to note, that when working with scalar variables, the default
+behavior is to B<copy> values.
+
+  my $stash = Package::Stash->new('Some::Namespace');
+  my $variable = 1;
+  # $Some::Namespace::name is a copy of $variable
+  $stash->add_symbol('$name', $variable);
+  $variable++
+  # $Some::Namespace::name == 1 , $variable == 2
+
+This will likely confuse people who expect it to work the same as typeglob
+assignment, which simply creates new references to existing variables.
+
+  my $variable = 1;
+  {
+      no strict 'refs';
+      # assign $Package::Stash::name = $variable
+      *{'Package::Stash::name'} = \$variable;
+  }
+  $variable++ # affects both names
+
+If this behaviour is desired when working with Package::Stash, simply pass
+Package::Stash a scalar ref:
+
+  my $stash = Package::Stash->new('Some::Namespace');
+  my $variable = 1;
+  # $Some::Namespace::name is now $variable
+  $stash->add_symbol('$name', \$variable);
+  $variable++
+  # $Some::Namespace::name == 2 , $variable == 2
+
+This will be what you want as well if you're ever working with L<Readonly>
+variables:
+
+  use Readonly;
+  Readonly my $value, 'hello';
+
+  $stash->add_symbol('$name', \$value); # reference
+  print $Some::Namespace::name; # hello
+  # Tries to modify the read-only 'hello' and dies.
+  $Some::Namespace::name .= " world";
+
+  $stash->add_symbol('$name', $value); # copy
+  print $Some::Namespace::name; # hello
+  # No problem, modifying a copy, not the original
+  $Some::Namespace::name .= " world";
+
+=head1 SEE ALSO
+
+=over 4
+
+=item * L<Class::MOP::Package>
+
+This module is a factoring out of code that used to live here
+
+=back
+
+=head1 HISTORY
+
+Based on code from L<Class::MOP::Package>, by Stevan Little and the Moose
+Cabal.
+
 =head1 BUGS / CAVEATS
 
 =over 4
@@ -215,70 +235,70 @@ L<perlref/Making References> point 7 for more information.
 
 =back
 
-Please report any bugs through RT: email
-C<bug-package-stash at rt.cpan.org>, or browse to
-L<http://rt.cpan.org/NoAuth/ReportBug.html?Queue=Package-Stash>.
+Bugs may be submitted through L<the RT bug tracker|https://rt.cpan.org/Public/Dist/Display.html?Name=Package-Stash>
+(or L<bug-Package-Stash@rt.cpan.org|mailto:bug-Package-Stash@rt.cpan.org>).
 
-=head1 SEE ALSO
-
-=over 4
-
-=item * L<Class::MOP::Package>
-
-This module is a factoring out of code that used to live here
-
-=back
-
-=head1 SUPPORT
-
-You can find this documentation for this module with the perldoc command.
-
-    perldoc Package::Stash
-
-You can also look for information at:
+=head1 AUTHORS
 
 =over 4
 
-=item * AnnoCPAN: Annotated CPAN documentation
+=item *
 
-L<http://annocpan.org/dist/Package-Stash>
+Stevan Little <stevan.little@iinteractive.com>
 
-=item * CPAN Ratings
+=item *
 
-L<http://cpanratings.perl.org/d/Package-Stash>
-
-=item * RT: CPAN's request tracker
-
-L<http://rt.cpan.org/NoAuth/Bugs.html?Dist=Package-Stash>
-
-=item * Search CPAN
-
-L<http://search.cpan.org/dist/Package-Stash>
+Jesse Luehrs <doy@tozt.net>
 
 =back
 
-=head1 AUTHOR
+=head1 CONTRIBUTORS
 
-Jesse Luehrs <doy at tozt dot net>
+=for stopwords Karen Etheridge Carlos Lima Dave Rolsky Justin Hunter Christian Walde Kent Fredric Niko Tyni Renee Tim Bunce
 
-Based on code from L<Class::MOP::Package>, by Stevan Little and the Moose
-Cabal.
+=over 4
 
-=for Pod::Coverage add_package_symbol
-remove_package_glob
-has_package_symbol
-get_package_symbol
-get_or_add_package_symbol
-remove_package_symbol
-list_all_package_symbols
+=item *
 
-=head1 AUTHOR
+Karen Etheridge <ether@cpan.org>
 
-Jesse Luehrs <doy at tozt dot net>
+=item *
+
+Carlos Lima <carlos@multi>
+
+=item *
+
+Dave Rolsky <autarch@urth.org>
+
+=item *
+
+Justin Hunter <justin.d.hunter@gmail.com>
+
+=item *
+
+Christian Walde <walde.christian@googlemail.com>
+
+=item *
+
+Kent Fredric <kentfredric@gmail.com>
+
+=item *
+
+Niko Tyni <ntyni@debian.org>
+
+=item *
+
+Renee <reb@perl-services.de>
+
+=item *
+
+Tim Bunce <Tim.Bunce@pobox.com>
+
+=back
 
 =head1 COPYRIGHT AND LICENSE
 
-This software is copyright (c) 2013 by Jesse Luehrs.
+This software is copyright (c) 2020 by Jesse Luehrs.
 
 This is free software; you can redistribute it and/or modify it under
 the same terms as the Perl 5 programming language system itself.

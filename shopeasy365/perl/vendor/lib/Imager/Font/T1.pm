@@ -1,12 +1,12 @@
 package Imager::Font::T1;
+use 5.006;
 use strict;
 use Imager::Color;
-use vars qw(@ISA $VERSION);
-@ISA = qw(Imager::Font);
+our @ISA = qw(Imager::Font);
 use Scalar::Util ();
 
 BEGIN {
-  $VERSION = "1.019";
+  our $VERSION = "1.027";
 
   require XSLoader;
   XSLoader::load('Imager::Font::T1', $VERSION);
@@ -87,14 +87,13 @@ sub _draw {
   if (exists $input{channel}) {
     $self->{t1font}->cp($input{image}{IMG}, $input{'x'}, $input{'y'},
 		    $input{channel}, $input{size},
-		    $input{string}, length($input{string}), $input{align},
+		    $input{string}, $input{align},
                     $input{utf8}, $flags, $aa)
       or return;
   } else {
     $self->{t1font}->text($input{image}{IMG}, $input{'x'}, $input{'y'}, 
 		      $input{color}, $input{size}, 
-		      $input{string}, length($input{string}), 
-		      $input{align}, $input{utf8}, $flags, $aa)
+		      $input{string}, $input{align}, $input{utf8}, $flags, $aa)
       or return;
   }
 
@@ -112,8 +111,14 @@ sub _bounding_box {
   $flags .= 'u' if $input{underline};
   $flags .= 's' if $input{strikethrough};
   $flags .= 'o' if $input{overline};
-  return $self->{t1font}->bbox($input{size}, $input{string},
-			   length($input{string}), $input{utf8}, $flags);
+  my @bbox =  $self->{t1font}->bbox($input{size}, $input{string},
+				    $input{utf8}, $flags);
+  unless (@bbox) {
+    Imager->_set_error(Imager->_error_as_msg);
+    return;
+  }
+
+  return @bbox;
 }
 
 # check if the font has the characters in the given string
@@ -123,15 +128,36 @@ sub has_chars {
   $self->_valid
     or return;
 
-  unless (defined $hsh{string} && length $hsh{string}) {
+  unless (defined $hsh{string}) {
     $Imager::ERRSTR = "No string supplied to \$font->has_chars()";
     return;
   }
-  return $self->{t1font}->has_chars($hsh{string}, 
-				    _first($hsh{'utf8'}, $self->{utf8}, 0));
+  if (wantarray) {
+    my @result = $self->{t1font}
+      ->has_chars($hsh{string}, _first($hsh{'utf8'}, $self->{utf8}, 0));
+    unless (@result) {
+      Imager->_set_error(Imager->_error_as_msg);
+      return;
+    }
+
+    return @result;
+  }
+  else {
+    my $result = $self->{t1font}
+      ->has_chars($hsh{string}, _first($hsh{'utf8'}, $self->{utf8}, 0));
+    unless (defined $result) {
+      Imager->_set_error(Imager->_error_as_msg);
+      return;
+    }
+    return $result;
+  }
 }
 
 sub utf8 {
+  1;
+}
+
+sub can_glyph_names {
   1;
 }
 
@@ -155,7 +181,13 @@ sub glyph_names {
     or return Imager->_set_error("no string parameter passed to glyph_names");
   my $utf8 = _first($input{utf8} || 0);
 
-  return $self->{t1font}->glyph_name($string, $utf8);
+  my @result = $self->{t1font}->glyph_names($string, $utf8);
+  unless (@result) {
+    Imager->_set_error(Imager->_error_as_msg);
+    return;
+  }
+
+  return @result;
 }
 
 sub set_aa_level {
@@ -201,7 +233,15 @@ __END__
 
 =head1 DESCRIPTION
 
-Imager::Font creates a Imager::Font::Type1 object when asked to create
+=for stopwords Freetype
+
+Imager::Font::T1 is deprecated.
+
+F<T1Lib> is unmaintained and has serious bugs when built on 64-bit
+systems.  Freetype 2 has Type 1 font support and is supported by
+Imager via L<Imager::Font::FT2>.
+
+L<Imager::Font> creates a C<Imager::Font::Type1 object> when asked to create
 a font object based on a C<.pfb> file.
 
 See Imager::Font to see how to use this type.

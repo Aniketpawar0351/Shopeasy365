@@ -1,23 +1,29 @@
 # Net::Netrc.pm
 #
-# Copyright (c) 1995-1998 Graham Barr <gbarr@pobox.com>. All rights reserved.
-# This program is free software; you can redistribute it and/or
-# modify it under the same terms as Perl itself.
+# Copyright (C) 1995-1998 Graham Barr.  All rights reserved.
+# Copyright (C) 2013-2014, 2020 Steve Hay.  All rights reserved.
+# This module is free software; you can redistribute it and/or modify it under
+# the same terms as Perl itself, i.e. under the terms of either the GNU General
+# Public License or the Artistic License, as specified in the F<LICENCE> file.
 
 package Net::Netrc;
 
-use Carp;
-use strict;
-use FileHandle;
-use vars qw($VERSION);
+use 5.008001;
 
-$VERSION = "2.12";
+use strict;
+use warnings;
+
+use Carp;
+use FileHandle;
+
+our $VERSION = "3.13";
+
+our $TESTING;
 
 my %netrc = ();
 
-
 sub _readrc {
-  my $host = shift;
+  my($class, $host) = @_;
   my ($home, $file);
 
   if ($^O eq "MacOS") {
@@ -27,10 +33,18 @@ sub _readrc {
   }
   else {
 
-    # Some OS's don't have `getpwuid', so we default to $ENV{HOME}
+    # Some OS's don't have "getpwuid", so we default to $ENV{HOME}
     $home = eval { (getpwuid($>))[7] } || $ENV{HOME};
     $home ||= $ENV{HOMEDRIVE} . ($ENV{HOMEPATH} || '') if defined $ENV{HOMEDRIVE};
-    $file = $home . "/.netrc";
+    if (-e $home . "/.netrc") {
+      $file = $home . "/.netrc";
+    }
+    elsif (-e $home . "/_netrc") {
+      $file = $home . "/_netrc";
+    }
+    else {
+      return unless $TESTING;
+    }
   }
 
   my ($login, $pass, $acct) = (undef, undef, undef);
@@ -39,7 +53,7 @@ sub _readrc {
 
   $netrc{default} = undef;
 
-  # OS/2 and Win32 do not handle stat in a way compatable with this check :-(
+  # OS/2 and Win32 do not handle stat in a way compatible with this check :-(
   unless ($^O eq 'os2'
     || $^O eq 'MSWin32'
     || $^O eq 'MacOS'
@@ -48,7 +62,7 @@ sub _readrc {
     my @stat = stat($file);
 
     if (@stat) {
-      if ($stat[2] & 077) {
+      if ($stat[2] & 077) { ## no critic (ValuesAndExpressions::ProhibitLeadingZeros)
         carp "Bad permissions: $file";
         return;
       }
@@ -82,7 +96,7 @@ sub _readrc {
       while (@tok) {
         if ($tok[0] eq "default") {
           shift(@tok);
-          $mach = bless {};
+          $mach = bless {}, $class;
           $netrc{default} = [$mach];
 
           next TOKEN;
@@ -95,7 +109,7 @@ sub _readrc {
 
         if ($tok eq "machine") {
           my $host = shift @tok;
-          $mach = bless {machine => $host};
+          $mach = bless {machine => $host}, $class;
 
           $netrc{$host} = []
             unless exists($netrc{$host});
@@ -124,9 +138,9 @@ sub _readrc {
 
 
 sub lookup {
-  my ($pkg, $mach, $login) = @_;
+  my ($class, $mach, $login) = @_;
 
-  _readrc()
+  $class->_readrc()
     unless exists $netrc{default};
 
   $mach ||= 'default';
@@ -135,12 +149,11 @@ sub lookup {
 
   if (exists $netrc{$mach}) {
     if (defined $login) {
-      my $m;
-      foreach $m (@{$netrc{$mach}}) {
+      foreach my $m (@{$netrc{$mach}}) {
         return $m
           if (exists $m->{login} && $m->{login} eq $login);
       }
-      return undef;
+      return;
     }
     return $netrc{$mach}->[0];
   }
@@ -148,7 +161,7 @@ sub lookup {
   return $netrc{default}->[0]
     if defined $netrc{default};
 
-  return undef;
+  return;
 }
 
 
@@ -211,7 +224,7 @@ second the ownership permissions should be such that only the owner has
 read and write access. If these conditions are not met then a warning is
 output and the .netrc file is not read.
 
-=head1 THE .netrc FILE
+=head2 The F<.netrc> File
 
 The .netrc file contains login and initialization information used by the
 auto-login process.  It resides in the user's home directory.  The following
@@ -263,7 +276,7 @@ with I<ftp>.
 
 =back
 
-=head1 CONSTRUCTOR
+=head2 Class Methods
 
 The constructor for a C<Net::Netrc> object is not called new as it does not
 really create a new object. But instead is called C<lookup> as this is
@@ -271,11 +284,11 @@ essentially what it does.
 
 =over 4
 
-=item lookup ( MACHINE [, LOGIN ])
+=item C<lookup($machine[, $login])>
 
-Lookup and return a reference to the entry for C<MACHINE>. If C<LOGIN> is given
-then the entry returned will have the given login. If C<LOGIN> is not given then
-the first entry in the .netrc file for C<MACHINE> will be returned.
+Lookup and return a reference to the entry for C<$machine>. If C<$login> is given
+then the entry returned will have the given login. If C<$login> is not given then
+the first entry in the .netrc file for C<$machine> will be returned.
 
 If a matching entry cannot be found, and a default entry exists, then a
 reference to the default entry is returned.
@@ -285,41 +298,69 @@ no .netrc file is found, then C<undef> is returned.
 
 =back
 
-=head1 METHODS
+=head2 Object Methods
 
 =over 4
 
-=item login ()
+=item C<login()>
 
 Return the login id for the netrc entry
 
-=item password ()
+=item C<password()>
 
 Return the password for the netrc entry
 
-=item account ()
+=item C<account()>
 
 Return the account information for the netrc entry
 
-=item lpa ()
+=item C<lpa()>
 
-Return a list of login, password and account information fir the netrc entry
+Return a list of login, password and account information for the netrc entry
 
 =back
 
-=head1 AUTHOR
+=head1 EXPORTS
 
-Graham Barr <gbarr@pobox.com>
+I<None>.
+
+=head1 KNOWN BUGS
+
+See L<https://rt.cpan.org/Dist/Display.html?Status=Active&Queue=libnet>.
 
 =head1 SEE ALSO
 
-L<Net::Netrc>
-L<Net::Cmd>
+L<Net::Cmd>.
+
+=head1 AUTHOR
+
+Graham Barr E<lt>L<gbarr@pobox.com|mailto:gbarr@pobox.com>E<gt>.
+
+Steve Hay E<lt>L<shay@cpan.org|mailto:shay@cpan.org>E<gt> is now maintaining
+libnet as of version 1.22_02.
 
 =head1 COPYRIGHT
 
-Copyright (c) 1995-1998 Graham Barr. All rights reserved.
-This program is free software; you can redistribute it and/or modify
-it under the same terms as Perl itself.
+Copyright (C) 1995-1998 Graham Barr.  All rights reserved.
+
+Copyright (C) 2013-2014, 2020 Steve Hay.  All rights reserved.
+
+=head1 LICENCE
+
+This module is free software; you can redistribute it and/or modify it under the
+same terms as Perl itself, i.e. under the terms of either the GNU General Public
+License or the Artistic License, as specified in the F<LICENCE> file.
+
+=head1 VERSION
+
+Version 3.13
+
+=head1 DATE
+
+23 Dec 2020
+
+=head1 HISTORY
+
+See the F<Changes> file.
 
 =cut

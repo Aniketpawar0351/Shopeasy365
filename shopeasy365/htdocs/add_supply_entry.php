@@ -67,7 +67,7 @@ include("database.php");
 
    <div class="form-group">
      <label for="sudate">Date</label>
-     <input type="datetime-local" class="form-control" id="exampleInputphoneno" name="sudate" required>
+     <input type="date" class="form-control" id="exampleInputphoneno" name="sudate" required>
    </div>
    <button type="submit" class="btn btn-primary" name="submit">Add Entry</button>
    </form>

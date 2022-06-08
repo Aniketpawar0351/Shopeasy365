@@ -27,7 +27,7 @@ background: linear-gradient(to right, #CFDEF3, #E0EAFC); /* W3C, IE 10+/ Edge, F
 
 <?php
 session_start();
-
+setcookie("userid","aniket",time()-3600);
 session_destroy();
 echo"<script>let timerInterval
 Swal.fire({

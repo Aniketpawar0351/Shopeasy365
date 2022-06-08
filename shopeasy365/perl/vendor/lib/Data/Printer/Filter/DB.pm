@@ -9,7 +9,7 @@ filter 'DBI::db', sub {
     my $name = $dbh->{Driver}{Name};
 
     my $string = "$name Database Handle ("
-               . ($dbh->{Active} 
+               . ($dbh->{Active}
                   ? colored('connected', 'bright_green')
                   : colored('disconnected', 'bright_red'))
                . ') {'
@@ -45,7 +45,7 @@ filter 'DBI::st', sub {
     if ($sth->{NUM_OF_PARAMS} > 0) {
         my $values = $sth->{ParamValues};
         if ($values) {
-            $str .= '  (' 
+            $str .= '  ('
                  . join(', ',
                       map {
                          my $v = $values->{$_};
@@ -65,8 +65,12 @@ filter 'DBI::st', sub {
 filter '-class' => sub {
     my ($obj, $properties) = @_;
 
+    # TODO: if it's a Result, show columns and relationships (anything that
+    #       doesn't involve touching the database
     if ( $obj->isa('DBIx::Class::Schema') ) {
         return ref($obj) . ' DBIC Schema with ' . p( $obj->storage->dbh );
+        # TODO: show a list of all class_mappings available for the schema
+        #       (a.k.a. tables)
     }
     elsif ( grep { $obj->isa($_) } qw(DBIx::Class::ResultSet DBIx::Class::ResultSetColumn) ) {
 
@@ -125,9 +129,13 @@ or, in your C<.dataprinter> file:
 
 =head1 DESCRIPTION
 
-This is a filter plugin for L<Data::Printer>. It filters through
-L<DBI>'s handlers (dbh) and statement (sth) objects displaying relevant
-information for the user.
+This is a filter plugin for L<Data::Printer>. It filters through L<DBI>'s
+handlers (dbh) and statement (sth) objects displaying relevant information for
+the user.  It also filters any object which inherits from
+L<DBIx::Class::Schema>, L<DBIx::Class::ResultSet> or
+L<DBIx::Class::ResultSetColumn>.
+
+=head2 DBI Sample Output
 
 L<DBI> is an extremely powerful and complete database interface. But
 it does a lot of magic under the hood, making their objects somewhat harder
@@ -178,9 +186,6 @@ exactly what you came for:
 Note that if your driver does not support holding of parameter values, you'll get a
 C<bindings unavailable> message instead of the bound values.
 
-
 =head1 SEE ALSO
 
-L<Data::Printer>
-
-
+L<Data::Printer>, L<Data::Printer::Filter>

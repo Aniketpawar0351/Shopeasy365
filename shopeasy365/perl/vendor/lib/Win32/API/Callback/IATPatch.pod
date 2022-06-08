@@ -20,7 +20,7 @@ Win32::API::Callback::IATPatch - Hooking and Patching a DLL's Imported C Functio
     'N'
   );
   my $patch = Win32::API::Callback::IATPatch->new(
-    $callback, "perl517.dll", 'kernel32.dll', 'LoadLibraryExA');
+    $callback, "perl518.dll", 'kernel32.dll', 'LoadLibraryExA');
   die "failed to create IATPatch Obj $^E" if ! defined $patch;
   $LoadLibraryExA = Win32::API::More->new( undef, $patch->GetOriginalFunctionPtr(), '
   HMODULE
@@ -40,11 +40,11 @@ Win32::API::Callback::IATPatch - Hooking and Patching a DLL's Imported C Functio
 Win32::API::Callback::IATPatch allows you to hook a compile time dynamic linked
 function call from any DLL (or EXE, from now on all examples are from a DLL to
 another DLL, but from a EXE to a DLL is implied) in the Perl process, to a
-differnt DLL in the same Perl process, by placing a Win32::API::Callback object
+different DLL in the same Perl process, by placing a Win32::API::Callback object
 in between. This module does B<not> hook B<GetProcAddress> function calls. It
 also will not hook a function call from a DLL to another function in the same
 DLL. The function you want to hook B<must> appear in the B<import table> of the
-DLL you want to use the hook. Functiont are from delay loaded DLL have their own
+DLL you want to use the hook. Functions from delay loaded DLL have their own
 import table, it is different import table from the normal one IATPatch supports.
 IATPatch will not find a delay loaded function and will not patch it. The hook
 occurs at the caller DLL, not the callee DLL. This means your callback will be
@@ -62,16 +62,16 @@ script creates IATPatch object, where calls from that new DLL goto the real
 destination function without hooking. If a DLL is unloaded, then reloaded into
 the process, you must call C<Unpatch(0)> method on the old IATPatch object, then
 create a new IATPatch object. IATPatch has no notification feature that a DLL
-is being loaded or unloaded from the process. Unless you completly control, and
+is being loaded or unloaded from the process. Unless you completely control, and
 have the source code of the caller DLL, and understand all of the source code of
 that DLL, there is a high chance that you will B<NOT> hook all calls from that
-DLL to the destionation function. If a call to the destination function is
+DLL to the destination function. If a call to the destination function is
 dangerous or unacceptable, do not use IATPatch. IATPatch is not Microsoft
 Detours or the like in any sense. Detours and its brethern will rewrite the
-machine code in the begining of the destination function call, hooking all
+machine code in the beginning of the destination function call, hooking all
 calls to that function call process wide, without exception.
 
-Why this module was created? So I created create mock kernel32 functions to
+Why this module was created? So I could mock kernel32 functions to
 unit test Perl's C function calls to Kernel32.
 
 =head2 CONSTRUCTORS
@@ -82,7 +82,7 @@ unit test Perl's C function calls to Kernel32.
   $A_Win32_API_Callback_Obj,    $EXE_or_DLL_hmodule_or_name_to_hook,
   $import_DLL_name,             $import_function_name_or_ordinal);
 
-Creates a new IATPatch object. The Win32::API::Callback will be called aslong
+Creates a new IATPatch object. The Win32::API::Callback will be called as long
 as the IATPatch object exists. When an IATPatch object is DESTROYed, unless
 C<-E<gt>Unpatch(0)> is called first, the patch is undone and the original
 function is directly called from then on by that DLL. The DLL is not reference
@@ -92,7 +92,7 @@ will croak when it tries to unpatch the DLL. The DLL to hook must be a valid
 PE file, while in memory. DLL and EXE "packers" can create invalid PE
 files that do load successfully into memory, but they are not full PE files in
 memory. On error, undef is returned and an error code is available through
-L<Win32::GetLastError|Win32/Win32::GetLastError()>/L<perlvar/"$^E">. The error code may from either
+L<Win32::GetLastError|Win32/Win32::GetLastError()>/L<perlvar/"$^E">. The error code may be from either
 IATPatch directly, or from a Win32 call that IATPatch made. IATPatch objects
 do not go through a L<perlfunc/"fork"> onto the child interp. IATPatch is fork safe.
 

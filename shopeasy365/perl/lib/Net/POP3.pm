@@ -1,22 +1,54 @@
 # Net::POP3.pm
 #
-# Copyright (c) 1995-2004 Graham Barr <gbarr@pobox.com>. All rights reserved.
-# This program is free software; you can redistribute it and/or
-# modify it under the same terms as Perl itself.
+# Copyright (C) 1995-2004 Graham Barr.  All rights reserved.
+# Copyright (C) 2013-2016, 2020 Steve Hay.  All rights reserved.
+# This module is free software; you can redistribute it and/or modify it under
+# the same terms as Perl itself, i.e. under the terms of either the GNU General
+# Public License or the Artistic License, as specified in the F<LICENCE> file.
 
 package Net::POP3;
 
+use 5.008001;
+
 use strict;
-use IO::Socket;
-use vars qw(@ISA $VERSION $debug);
-use Net::Cmd;
+use warnings;
+
 use Carp;
+use IO::Socket;
+use Net::Cmd;
 use Net::Config;
 
-$VERSION = "2.29";
+our $VERSION = "3.13";
 
-@ISA = qw(Net::Cmd IO::Socket::INET);
+# Code for detecting if we can use SSL
+my $ssl_class = eval {
+  require IO::Socket::SSL;
+  # first version with default CA on most platforms
+  no warnings 'numeric';
+  IO::Socket::SSL->VERSION(2.007);
+} && 'IO::Socket::SSL';
 
+my $nossl_warn = !$ssl_class &&
+  'To use SSL please install IO::Socket::SSL with version>=2.007';
+
+# Code for detecting if we can use IPv6
+my $family_key = 'Domain';
+my $inet6_class = eval {
+  require IO::Socket::IP;
+  no warnings 'numeric';
+  IO::Socket::IP->VERSION(0.25) || die;
+  $family_key = 'Family';
+} && 'IO::Socket::IP' || eval {
+  require IO::Socket::INET6;
+  no warnings 'numeric';
+  IO::Socket::INET6->VERSION(2.62);
+} && 'IO::Socket::INET6';
+
+
+sub can_ssl   { $ssl_class };
+sub can_inet6 { $inet6_class };
+
+our @ISA = ('Net::Cmd', $inet6_class || 'IO::Socket::INET');
 
 sub new {
   my $self = shift;
@@ -32,33 +64,43 @@ sub new {
   }
   my $hosts = defined $host ? [$host] : $NetConfig{pop3_hosts};
   my $obj;
-  my @localport = exists $arg{ResvPort} ? (LocalPort => $arg{ResvPort}) : ();
 
-  my $h;
-  foreach $h (@{$hosts}) {
+  if ($arg{SSL}) {
+    # SSL from start
+    die $nossl_warn if !$ssl_class;
+    $arg{Port} ||= 995;
+  }
+
+  $arg{Timeout} = 120 if ! defined $arg{Timeout};
+
+  foreach my $h (@{$hosts}) {
     $obj = $type->SUPER::new(
       PeerAddr => ($host = $h),
       PeerPort => $arg{Port} || 'pop3(110)',
       Proto => 'tcp',
-      @localport,
-      Timeout => defined $arg{Timeout}
-      ? $arg{Timeout}
-      : 120
+      $family_key => $arg{Domain} || $arg{Family},
+      LocalAddr => $arg{LocalAddr},
+      LocalPort => exists($arg{ResvPort}) ? $arg{ResvPort} : $arg{LocalPort},
+      Timeout => $arg{Timeout},
       )
       and last;
   }
 
-  return undef
+  return
     unless defined $obj;
 
+  ${*$obj}{'net_pop3_arg'} = \%arg;
   ${*$obj}{'net_pop3_host'} = $host;
+  if ($arg{SSL}) {
+    Net::POP3::_SSL->start_SSL($obj,%arg) or return;
+  }
 
   $obj->autoflush(1);
   $obj->debug(exists $arg{Debug} ? $arg{Debug} : undef);
 
   unless ($obj->response() == CMD_OK) {
     $obj->close();
-    return undef;
+    return;
   }
 
   ${*$obj}{'net_pop3_banner'} = $obj->message;
@@ -82,7 +124,7 @@ sub debug_text { $_[2] =~ /^(pass|rpop)/i ? "$1 ....\n" : $_[2]; }
 
 
 sub login {
-  @_ >= 1 && @_ <= 3 or croak 'usage: $pop3->login( USER, PASS )';
+  @_ >= 1 && @_ <= 3 or croak 'usage: $pop3->login([$user[, $pass]])';
   my ($me, $user, $pass) = @_;
 
   if (@_ <= 2) {
@@ -93,9 +135,19 @@ sub login {
     and $me->pass($pass);
 }
 
+sub starttls {
+  my $self = shift;
+  $ssl_class or die $nossl_warn;
+  $self->_STLS or return;
+  Net::POP3::_SSL->start_SSL($self,
+    %{ ${*$self}{'net_pop3_arg'} }, # (ssl) args given in new
+    @_   # more (ssl) args
+  ) or return;
+  return 1;
+}
 
 sub apop {
-  @_ >= 1 && @_ <= 3 or croak 'usage: $pop3->apop( USER, PASS )';
+  @_ >= 1 && @_ <= 3 or croak 'usage: $pop3->apop([$user[, $pass]])';
   my ($me, $user, $pass) = @_;
   my $banner;
   my $md;
@@ -108,10 +160,10 @@ sub apop {
   }
   else {
     carp "You need to install Digest::MD5 or MD5 to use the APOP command";
-    return undef;
+    return;
   }
 
-  return undef
+  return
     unless ($banner = (${*$me}{'net_pop3_banner'} =~ /(<.*>)/)[0]);
 
   if (@_ <= 2) {
@@ -120,7 +172,7 @@ sub apop {
 
   $md->add($banner, $pass);
 
-  return undef
+  return
     unless ($me->_APOP($user, $md->hexdigest));
 
   $me->_get_mailbox_count();
@@ -128,17 +180,17 @@ sub apop {
 
 
 sub user {
-  @_ == 2 or croak 'usage: $pop3->user( USER )';
+  @_ == 2 or croak 'usage: $pop3->user($user)';
   $_[0]->_USER($_[1]) ? 1 : undef;
 }
 
 
 sub pass {
-  @_ == 2 or croak 'usage: $pop3->pass( PASS )';
+  @_ == 2 or croak 'usage: $pop3->pass($pass)';
 
   my ($me, $pass) = @_;
 
-  return undef
+  return
     unless ($me->_PASS($pass));
 
   $me->_get_mailbox_count();
@@ -165,7 +217,7 @@ sub reset {
 sub last {
   @_ == 1 or croak 'usage: $obj->last()';
 
-  return undef
+  return
     unless $_[0]->_LAST && $_[0]->message =~ /(\d+)/;
 
   return $1;
@@ -173,10 +225,10 @@ sub last {
 
 
 sub top {
-  @_ == 2 || @_ == 3 or croak 'usage: $pop3->top( MSGNUM [, NUMLINES ])';
+  @_ == 2 || @_ == 3 or croak 'usage: $pop3->top($msgnum[, $numlines])';
   my $me = shift;
 
-  return undef
+  return
     unless $me->_TOP($_[0], $_[1] || 0);
 
   $me->read_until_dot;
@@ -195,10 +247,10 @@ sub popstat {
 
 
 sub list {
-  @_ == 1 || @_ == 2 or croak 'usage: $pop3->list( [ MSGNUM ] )';
+  @_ == 1 || @_ == 2 or croak 'usage: $pop3->list([$msgnum])';
   my $me = shift;
 
-  return undef
+  return
     unless $me->_LIST(@_);
 
   if (@_) {
@@ -207,7 +259,7 @@ sub list {
   }
 
   my $info = $me->read_until_dot
-    or return undef;
+    or return;
 
   my %hash = map { (/(\d+)\D+(\d+)/) } @$info;
 
@@ -216,10 +268,10 @@ sub list {
 
 
 sub get {
-  @_ == 2 or @_ == 3 or croak 'usage: $pop3->get( MSGNUM [, FH ])';
+  @_ == 2 or @_ == 3 or croak 'usage: $pop3->get($msgnum[, $fh])';
   my $me = shift;
 
-  return undef
+  return
     unless $me->_RETR(shift);
 
   $me->read_until_dot(@_);
@@ -227,7 +279,7 @@ sub get {
 
 
 sub getfh {
-  @_ == 2 or croak 'usage: $pop3->getfh( MSGNUM )';
+  @_ == 2 or croak 'usage: $pop3->getfh($msgnum)';
   my $me = shift;
 
   return unless $me->_RETR(shift);
@@ -236,7 +288,7 @@ sub getfh {
 
 
 sub delete {
-  @_ == 2 or croak 'usage: $pop3->delete( MSGNUM )';
+  @_ == 2 or croak 'usage: $pop3->delete($msgnum)';
   my $me = shift;
   return 0 unless $me->_DELE(@_);
   ${*$me}{'net_pop3_deleted'} = 1;
@@ -244,21 +296,20 @@ sub delete {
 
 
 sub uidl {
-  @_ == 1 || @_ == 2 or croak 'usage: $pop3->uidl( [ MSGNUM ] )';
+  @_ == 1 || @_ == 2 or croak 'usage: $pop3->uidl([$msgnum])';
   my $me = shift;
   my $uidl;
 
   $me->_UIDL(@_)
-    or return undef;
+    or return;
   if (@_) {
     $uidl = ($me->message =~ /\d+\s+([\041-\176]+)/)[0];
   }
   else {
     my $ref = $me->read_until_dot
-      or return undef;
-    my $ln;
+      or return;
     $uidl = {};
-    foreach $ln (@$ref) {
+    foreach my $ln (@$ref) {
       my ($msg, $uid) = $ln =~ /^\s*(\d+)\s+([\041-\176]+)/;
       $uidl->{$msg} = $uid;
     }
@@ -268,7 +319,7 @@ sub uidl {
 
 
 sub ping {
-  @_ == 2 or croak 'usage: $pop3->ping( USER )';
+  @_ == 2 or croak 'usage: $pop3->ping($user)';
   my $me = shift;
 
   return () unless $me->_PING(@_) && $me->message =~ /(\d+)\D+(\d+)/;
@@ -307,26 +358,23 @@ sub _get_mailbox_count {
 }
 
 
-sub _STAT { shift->command('STAT')->response() == CMD_OK }
-sub _LIST { shift->command('LIST', @_)->response() == CMD_OK }
+sub _STAT { shift->command('STAT'       )->response() == CMD_OK }
+sub _LIST { shift->command('LIST',    @_)->response() == CMD_OK }
 sub _RETR { shift->command('RETR', $_[0])->response() == CMD_OK }
 sub _DELE { shift->command('DELE', $_[0])->response() == CMD_OK }
-sub _NOOP { shift->command('NOOP')->response() == CMD_OK }
-sub _RSET { shift->command('RSET')->response() == CMD_OK }
-sub _QUIT { shift->command('QUIT')->response() == CMD_OK }
-sub _TOP  { shift->command('TOP', @_)->response() == CMD_OK }
-sub _UIDL { shift->command('UIDL', @_)->response() == CMD_OK }
+sub _NOOP { shift->command('NOOP'       )->response() == CMD_OK }
+sub _RSET { shift->command('RSET'       )->response() == CMD_OK }
+sub _QUIT { shift->command('QUIT'       )->response() == CMD_OK }
+sub _TOP  { shift->command( 'TOP',    @_)->response() == CMD_OK }
+sub _UIDL { shift->command('UIDL',    @_)->response() == CMD_OK }
 sub _USER { shift->command('USER', $_[0])->response() == CMD_OK }
 sub _PASS { shift->command('PASS', $_[0])->response() == CMD_OK }
-sub _APOP { shift->command('APOP', @_)->response() == CMD_OK }
+sub _APOP { shift->command('APOP',    @_)->response() == CMD_OK }
 sub _PING { shift->command('PING', $_[0])->response() == CMD_OK }
-
-
 sub _RPOP { shift->command('RPOP', $_[0])->response() == CMD_OK }
-sub _LAST { shift->command('LAST')->response() == CMD_OK }
-
-
-sub _CAPA { shift->command('CAPA')->response() == CMD_OK }
+sub _LAST { shift->command('LAST'       )->response() == CMD_OK }
+sub _CAPA { shift->command('CAPA'       )->response() == CMD_OK }
+sub _STLS { shift->command("STLS",     )->response() == CMD_OK }
 
 
 sub quit {
@@ -353,7 +401,7 @@ sub DESTROY {
 
 sub response {
   my $cmd  = shift;
-  my $str  = $cmd->getline() or return undef;
+  my $str  = $cmd->getline() or return;
   my $code = "500";
 
   $cmd->debug_print(0, $str)
@@ -488,9 +536,9 @@ sub auth {
     return 0;
     };
 
-  # We dont support sasl mechanisms that encrypt the socket traffic.
+  # We don't support sasl mechanisms that encrypt the socket traffic.
   # todo that we would really need to change the ISA hierarchy
-  # so we dont inherit from IO::Socket, but instead hold it in an attribute
+  # so we don't inherit from IO::Socket, but instead hold it in an attribute
 
   my @cmd = ("AUTH", $client->mechanism);
   my $code;
@@ -524,6 +572,26 @@ sub banner {
   return ${*$this}{'net_pop3_banner'};
 }
 
+{
+  package Net::POP3::_SSL;
+  our @ISA = ( $ssl_class ? ($ssl_class):(), 'Net::POP3' );
+  sub starttls { die "POP3 connection is already in SSL mode" }
+  sub start_SSL {
+    my ($class,$pop3,%arg) = @_;
+    delete @arg{ grep { !m{^SSL_} } keys %arg };
+    ( $arg{SSL_verifycn_name} ||= $pop3->host )
+        =~s{(?<!:):[\w()]+$}{}; # strip port
+    $arg{SSL_hostname} = $arg{SSL_verifycn_name}
+        if ! defined $arg{SSL_hostname} && $class->can_client_sni;
+    $arg{SSL_verifycn_scheme} ||= 'pop3';
+    my $ok = $class->SUPER::start_SSL($pop3,%arg);
+    $@ = $ssl_class->errstr if !$ok;
+    return $ok;
+  }
+}
+
+
+
 1;
 
 __END__
@@ -539,6 +607,7 @@ Net::POP3 - Post Office Protocol 3 Client class (RFC1939)
     # Constructors
     $pop = Net::POP3->new('pop3host');
     $pop = Net::POP3->new('pop3host', Timeout => 60);
+    $pop = Net::POP3->new('pop3host', SSL => 1, Timeout => 60);
 
     if ($pop->login($username, $password) > 0) {
       my $msgnums = $pop->list; # hashref of msgnum => size
@@ -556,25 +625,30 @@ Net::POP3 - Post Office Protocol 3 Client class (RFC1939)
 This module implements a client interface to the POP3 protocol, enabling
 a perl5 application to talk to POP3 servers. This documentation assumes
 that you are familiar with the POP3 protocol described in RFC1939.
+With L<IO::Socket::SSL> installed it also provides support for implicit and
+explicit TLS encryption, i.e. POP3S or POP3+STARTTLS.
 
 A new Net::POP3 object must be created with the I<new> method. Once
 this has been done, all POP3 commands are accessed via method calls
 on the object.
 
-=head1 CONSTRUCTOR
+The Net::POP3 class is a subclass of Net::Cmd and (depending on avaibility) of
+IO::Socket::IP, IO::Socket::INET6 or IO::Socket::INET.
+
+=head2 Class Methods
 
 =over 4
 
-=item new ( [ HOST ] [, OPTIONS ] 0
+=item C<new([$host][, %options])>
 
-This is the constructor for a new Net::POP3 object. C<HOST> is the
+This is the constructor for a new Net::POP3 object. C<$host> is the
 name of the remote host to which an POP3 connection is required.
 
-C<HOST> is optional. If C<HOST> is not given then it may instead be
+C<$host> is optional. If C<$host> is not given then it may instead be
 passed as the C<Host> option described below. If neither is given then
 the C<POP3_Hosts> specified in C<Net::Config> will be used.
 
-C<OPTIONS> are passed in a hash like fashion, using key and value pairs.
+C<%options> are passed in a hash like fashion, using key and value pairs.
 Possible options are:
 
 B<Host> - POP3 host to connect to. It may be a single scalar, as defined for
@@ -582,9 +656,22 @@ the C<PeerAddr> option in L<IO::Socket::INET>, or a reference to
 an array with hosts to try in turn. The L</host> method will return the value
 which was used to connect to the host.
 
-B<ResvPort> - If given then the socket for the C<Net::POP3> object
-will be bound to the local port given using C<bind> when the socket is
-created.
+B<Port> - port to connect to.
+Default - 110 for plain POP3 and 995 for POP3s (direct SSL).
+
+B<SSL> - If the connection should be done from start with SSL, contrary to later
+upgrade with C<starttls>.
+You can use SSL arguments as documented in L<IO::Socket::SSL>, but it will
+usually use the right arguments already.
+
+B<LocalAddr> and B<LocalPort> - These parameters are passed directly
+to IO::Socket to allow binding the socket to a specific local address and port.
+For compatibility with older versions B<ResvPort> can be used instead of
+B<LocalPort>.
+
+B<Domain> - This parameter is passed directly to IO::Socket and makes it
+possible to enforce IPv4 connections even if L<IO::Socket::IP> is used as super
+class. Alternatively B<Family> can be used.
 
 B<Timeout> - Maximum time, in seconds, to wait for a response from the
 POP3 server (default: 120)
@@ -593,30 +680,39 @@ B<Debug> - Enable debugging information
 
 =back
 
-=head1 METHODS
+=head2 Object Methods
 
 Unless otherwise stated all methods return either a I<true> or I<false>
 value, with I<true> meaning that the operation was a success. When a method
 states that it returns a value, failure will be returned as I<undef> or an
 empty list.
 
+C<Net::POP3> inherits from C<Net::Cmd> so methods defined in C<Net::Cmd> may
+be used to send commands to the remote POP3 server in addition to the methods
+documented here.
+
 =over 4
 
-=item auth ( USERNAME, PASSWORD )
+=item C<host()>
+
+Returns the value used by the constructor, and passed to IO::Socket::INET,
+to connect to the host.
+
+=item C<auth($username, $password)>
 
 Attempt SASL authentication.
 
-=item user ( USER )
+=item C<user($user)>
 
 Send the USER command.
 
-=item pass ( PASS )
+=item C<pass($pass)>
 
 Send the PASS command. Returns the number of messages in the mailbox.
 
-=item login ( [ USER [, PASS ]] )
+=item C<login([$user[, $pass]])>
 
-Send both the USER and PASS commands. If C<PASS> is not given the
+Send both the USER and PASS commands. If C<$pass> is not given the
 C<Net::POP3> uses C<Net::Netrc> to lookup the password using the host
 and username. If the username is not specified then the current user name
 will be used.
@@ -627,19 +723,25 @@ will give a true value in a boolean context, but zero in a numeric context.
 
 If there was an error authenticating the user then I<undef> will be returned.
 
-=item apop ( [ USER [, PASS ]] )
+=item C<starttls(%sslargs)>
 
-Authenticate with the server identifying as C<USER> with password C<PASS>.
+Upgrade existing plain connection to SSL.
+You can use SSL arguments as documented in L<IO::Socket::SSL>, but it will
+usually use the right arguments already.
+
+=item C<apop([$user[, $pass]])>
+
+Authenticate with the server identifying as C<$user> with password C<$pass>.
 Similar to L</login>, but the password is not sent in clear text.
 
 To use this method you must have the Digest::MD5 or the MD5 module installed,
 otherwise this method will return I<undef>.
 
-=item banner ()
+=item C<banner()>
 
 Return the sever's connection banner
 
-=item capa ()
+=item C<capa()>
 
 Return a reference to a hash of the capabilities of the server.  APOP
 is added as a pseudo capability.  Note that I've been unable to
@@ -647,96 +749,134 @@ find a list of the standard capability values, and some appear to
 be multi-word and some are not.  We make an attempt at intelligently
 parsing them, but it may not be correct.
 
-=item  capabilities ()
+=item C<capabilities()>
 
 Just like capa, but only uses a cache from the last time we asked
 the server, so as to avoid asking more than once.
 
-=item top ( MSGNUM [, NUMLINES ] )
+=item C<top($msgnum[, $numlines])>
 
-Get the header and the first C<NUMLINES> of the body for the message
-C<MSGNUM>. Returns a reference to an array which contains the lines of text
+Get the header and the first C<$numlines> of the body for the message
+C<$msgnum>. Returns a reference to an array which contains the lines of text
 read from the server.
 
-=item list ( [ MSGNUM ] )
+=item C<list([$msgnum])>
 
 If called with an argument the C<list> returns the size of the message
 in octets.
 
 If called without arguments a reference to a hash is returned. The
-keys will be the C<MSGNUM>'s of all undeleted messages and the values will
+keys will be the C<$msgnum>'s of all undeleted messages and the values will
 be their size in octets.
 
-=item get ( MSGNUM [, FH ] )
+=item C<get($msgnum[, $fh])>
 
-Get the message C<MSGNUM> from the remote mailbox. If C<FH> is not given
+Get the message C<$msgnum> from the remote mailbox. If C<$fh> is not given
 then get returns a reference to an array which contains the lines of
-text read from the server. If C<FH> is given then the lines returned
-from the server are printed to the filehandle C<FH>.
+text read from the server. If C<$fh> is given then the lines returned
+from the server are printed to the filehandle C<$fh>.
 
-=item getfh ( MSGNUM )
+=item C<getfh($msgnum)>
 
 As per get(), but returns a tied filehandle.  Reading from this
 filehandle returns the requested message.  The filehandle will return
 EOF at the end of the message and should not be reused.
 
-=item last ()
+=item C<last()>
 
-Returns the highest C<MSGNUM> of all the messages accessed.
+Returns the highest C<$msgnum> of all the messages accessed.
 
-=item popstat ()
+=item C<popstat()>
 
 Returns a list of two elements. These are the number of undeleted
 elements and the size of the mbox in octets.
 
-=item ping ( USER )
+=item C<ping($user)>
 
 Returns a list of two elements. These are the number of new messages
-and the total number of messages for C<USER>.
+and the total number of messages for C<$user>.
 
-=item uidl ( [ MSGNUM ] )
+=item C<uidl([$msgnum])>
 
-Returns a unique identifier for C<MSGNUM> if given. If C<MSGNUM> is not
+Returns a unique identifier for C<$msgnum> if given. If C<$msgnum> is not
 given C<uidl> returns a reference to a hash where the keys are the
 message numbers and the values are the unique identifiers.
 
-=item delete ( MSGNUM )
+=item C<delete($msgnum)>
 
-Mark message C<MSGNUM> to be deleted from the remote mailbox. All messages
+Mark message C<$msgnum> to be deleted from the remote mailbox. All messages
 that are marked to be deleted will be removed from the remote mailbox
 when the server connection closed.
 
-=item reset ()
+=item C<reset()>
 
 Reset the status of the remote POP3 server. This includes resetting the
 status of all messages to not be deleted.
 
-=item quit ()
+=item C<quit()>
 
 Quit and close the connection to the remote POP3 server. Any messages marked
 as deleted will be deleted from the remote mailbox.
 
+=item C<can_inet6()>
+
+Returns whether we can use IPv6.
+
+=item C<can_ssl()>
+
+Returns whether we can use SSL.
+
 =back
 
-=head1 NOTES
+=head2 Notes
 
 If a C<Net::POP3> object goes out of scope before C<quit> method is called
 then the C<reset> method will called before the connection is closed. This
 means that any messages marked to be deleted will not be.
 
+=head1 EXPORTS
+
+I<None>.
+
+=head1 KNOWN BUGS
+
+See L<https://rt.cpan.org/Dist/Display.html?Status=Active&Queue=libnet>.
+
 =head1 SEE ALSO
 
 L<Net::Netrc>,
-L<Net::Cmd>
+L<Net::Cmd>,
+L<IO::Socket::SSL>.
 
 =head1 AUTHOR
 
-Graham Barr <gbarr@pobox.com>
+Graham Barr E<lt>L<gbarr@pobox.com|mailto:gbarr@pobox.com>E<gt>.
+
+Steve Hay E<lt>L<shay@cpan.org|mailto:shay@cpan.org>E<gt> is now maintaining
+libnet as of version 1.22_02.
 
 =head1 COPYRIGHT
 
-Copyright (c) 1995-2003 Graham Barr. All rights reserved.
-This program is free software; you can redistribute it and/or modify
-it under the same terms as Perl itself.
+Copyright (C) 1995-2004 Graham Barr.  All rights reserved.
+
+Copyright (C) 2013-2016, 2020 Steve Hay.  All rights reserved.
+
+=head1 LICENCE
+
+This module is free software; you can redistribute it and/or modify it under the
+same terms as Perl itself, i.e. under the terms of either the GNU General Public
+License or the Artistic License, as specified in the F<LICENCE> file.
+
+=head1 VERSION
+
+Version 3.13
+
+=head1 DATE
+
+23 Dec 2020
+
+=head1 HISTORY
+
+See the F<Changes> file.
 
 =cut

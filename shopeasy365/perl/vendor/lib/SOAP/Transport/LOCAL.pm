@@ -4,16 +4,13 @@
 # SOAP::Lite is free software; you can redistribute it
 # and/or modify it under the same terms as Perl itself.
 #
-# $Id: LOCAL.pm 414 2012-07-15 09:18:42Z kutterma $
-#
 # ======================================================================
 
 package SOAP::Transport::LOCAL;
 
 use strict;
 
-
-our $VERSION = 0.715;
+our $VERSION = '1.27'; # VERSION
 
 # ======================================================================
 

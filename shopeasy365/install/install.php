@@ -1,5 +1,8 @@
 <?php
 
+    // Remove all warning messages
+    error_reporting(E_ALL & ~E_DEPRECATED & ~E_STRICT & ~E_WARNING & ~E_NOTICE);
+    $array = $slashrootreal = $backslashrootreal = $doublebackslashrootreal = array();
 
 		/*
 	#### Installer PHP  1.5 ####
@@ -9,7 +12,7 @@
 	/// Where I stand? ///
 	$curdir = getcwd();
   $usbstick="0";
-  
+
   if ( $_SERVER["argv"][1] == "usb" ) {
             // echo   $_SERVER["argv"][1];
             $usbstick="1";
@@ -25,7 +28,7 @@
 	list($partition, $nonpartition) = preg_split ("/:/", $curdir); //Fix by Wiedmann
 	$partwampp = substr(realpath(__FILE__), 0, strrpos(dirname(realpath(__FILE__)), '\\'));
 
-	$directorwampp = NULL;                                                  
+	$directorwampp = NULL;
 	if ($usbstick == "1" ) {
 	   $dirpartwampp=$nonpartition;
   } else {
@@ -36,15 +39,15 @@
 	$awkpartdoublebackslash = str_replace("&", "\\\\&", preg_replace ("/\\\\/i", "\\\\\\\\\\\\\\\\", $dirpartwampp)); //Fix by Wiedmann
 	$awkpartslash = str_replace("&", "\\\\&", preg_replace ("/\\\\/", "/", $dirpartwampp)); //Fix by Wiedmann
 
-  	
+
 	// Only debug
   // echo $partition."\n";
 	// 	echo $nonpartition."\n";
 	//		echo $partwampp."\n\n";
-          // echo $awkpart."\n"; 
+          // echo $awkpart."\n";
 				    // echo $awkpartslash."\n";
-				          // exit;			
-				
+				          // exit;
+
   $phpdir = $partwampp;
 	$dir = preg_replace("/\\\\/", "/", $partwampp);
 	$ppartition = "$partition:";
@@ -93,7 +96,7 @@
 	echo "  # Authors: Kay Vogelgesang <kvo@apachefriends.org>                     #\r\n";
 	echo "  #          Carsten Wiedmann <webmaster@wiedmann-online.de>             #\r\n";
 	echo "  ########################################################################\r\n\r\n";
-	
+
 	$confhttpdroot = $partwampp."\apache\\conf\\httpd.conf";
 
 	// Find the install status for xampp basic package in the install.sys file
@@ -108,7 +111,7 @@
           $usbstick="1";
           $partwampp=$nonpartition;
         //exit;
-      } 
+      }
 			$sysroot[] = $zeile;
 			$i += 1;
 		}
@@ -171,7 +174,7 @@
 					}
 					$updateinc = "xampp".$update.".inc";
 					$updateconf = $update.".conf";
-					
+
 					$i++;
 				}
 				fclose($datei);
@@ -188,19 +191,19 @@
 					}
 					fclose($datei);
 
-		/// Analyze install.sys to *update.syse for todo 
-		
+		/// Analyze install.sys to *update.syse for todo
+
 		//// Vogelgesang 28.12.2005 => Must take old Section for addon functality
-		$datei = fopen($installsysroot,'w'); 
-        if($datei) 
-            { 
-                for($z=0;$z<$i+1;$z++) 
-                { 
+		$datei = fopen($installsysroot,'w');
+        if($datei)
+            {
+                for($z=0;$z<$i+1;$z++)
+                {
 					if (0 === stripos(trim($newzeile[$z]), trim($update))) // Fix by Wiedmann
 
 					{
 						list ($left, $right) = preg_split ("/=/", $newzeile[$z]);
-						
+
 						$left = preg_replace ("/\s/i","",$left);
 						$left = preg_replace ("/\r\n/i","",$left);
 						$right = trim(preg_replace ("/\r\n/i","",$right));
@@ -220,26 +223,26 @@
 						else
 						{
 							$updatemake="doppelt"; // Installation is current
-							fputs($datei,$newzeile[$z]); 
+							fputs($datei,$newzeile[$z]);
 						}
 
 					}
-					else 
-					{ 
-					fputs($datei,$newzeile[$z]); 
+					else
+					{
+					fputs($datei,$newzeile[$z]);
 					}
 				}
 			}
 	fclose($datei);
 //// Vogelgesang 28.12.2005 => Old Section for addon functality end here
 
-				
+
 					if (($updatemake == "makenew") || ($updatemake=="doppelt")) {
 						include_once "$partwampp\install\\$updateinc";
 					}
 				}
 				// httpd.conf modification for Perl, Python or Java (only single)
-				////// PATH CHANGING SINCE APACHE 2.2 
+				////// PATH CHANGING SINCE APACHE 2.2
 				/* if ($update == "perl") {
 					$includehttpdconf = "\r\n\r\nInclude conf/extra/perl.conf";
 				} */
@@ -798,7 +801,7 @@
 			}
 			fclose($datei);
 			unset($newzeile);
-			
+
 			/// Vogelgesang 28.12.06 because obsolet since 1.51
 			/* $i = 0;
 			$datei = fopen($confhttpd2root, 'r');
@@ -839,7 +842,7 @@
 				}
 			}
 			fclose($datei);
-			unset($newzeile);*/ 
+			unset($newzeile);*/
 			echo "  Done!\r\n\r\n";
 		}
 	}

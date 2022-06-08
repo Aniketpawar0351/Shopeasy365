@@ -19,27 +19,31 @@ use Locale::Maketext::Simple    Style => 'gettext';
 
 use vars    qw[ $VERBOSE $PREFER_BIN $FROM_EMAIL $USER_AGENT
                 $BLACKLIST $METHOD_FAIL $VERSION $METHODS
-                $FTP_PASSIVE $TIMEOUT $DEBUG $WARN
+                $FTP_PASSIVE $TIMEOUT $DEBUG $WARN $FORCEIPV4
             ];
 
-$VERSION        = '0.38';
+$VERSION        = '1.00';
 $VERSION        = eval $VERSION;    # avoid warnings with development releases
 $PREFER_BIN     = 0;                # XXX TODO implement
 $FROM_EMAIL     = 'File-Fetch@example.com';
 $USER_AGENT     = "File::Fetch/$VERSION";
 $BLACKLIST      = [qw|ftp|];
+push @$BLACKLIST, qw|lftp| if $^O eq 'dragonfly' || $^O eq 'hpux';
 $METHOD_FAIL    = { };
 $FTP_PASSIVE    = 1;
 $TIMEOUT        = 0;
 $DEBUG          = 0;
 $WARN           = 1;
+$FORCEIPV4      = 0;
 
 ### methods available to fetch the file depending on the scheme
 $METHODS = {
     http    => [ qw|lwp httptiny wget curl lftp fetch httplite lynx iosock| ],
+    https   => [ qw|lwp wget curl| ],
     ftp     => [ qw|lwp netftp wget curl lftp fetch ncftp ftp| ],
     file    => [ qw|lwp lftp file| ],
-    rsync   => [ qw|rsync| ]
+    rsync   => [ qw|rsync| ],
+    git     => [ qw|git| ],
 };
 
 ### silly warnings ###
@@ -87,7 +91,7 @@ File::Fetch - A generic file fetching mechanism
 File::Fetch is a generic file fetching mechanism.
 
 It allows you to fetch any file pointed to by a C<ftp>, C<http>,
-C<file>, or C<rsync> uri by a number of different means.
+C<file>, C<git> or C<rsync> uri by a number of different means.
 
 See the C<HOW IT WORKS> section further down for details.
 
@@ -161,6 +165,7 @@ http://www.abc.net.au/ the contents retrieved may be from a remote file called
         path            => { default => '/' },
         file            => { required => 1 },
         uri             => { required => 1 },
+        userinfo        => { default => '' },
         vol             => { default => '' }, # windows for file:// uris
         share           => { default => '' }, # windows for file:// uris
         file_default    => { default => 'file_default' },
@@ -398,7 +403,7 @@ sub _parse_uri {
     } else {
         ### using anything but qw() in hash slices may produce warnings
         ### in older perls :-(
-        @{$href}{ qw(host path) } = $uri =~ m|([^/]*)(/.*)$|s;
+        @{$href}{ qw(userinfo host path) } = $uri =~ m|(?:([^\@:]*:[^\:\@]*)@)?([^/]*)(/.*)$|s;
     }
 
     ### split the path into file + dir ###
@@ -564,6 +569,12 @@ sub _lwp_fetch {
 
     };
 
+    if ($self->scheme eq 'https') {
+        $use_list->{'LWP::Protocol::https'} = '0';
+    }
+
+    ### Fix CVE-2016-1238 ###
+    local $Module::Load::Conditional::FORCE_SAFE_INC = 1;
     unless( can_load( modules => $use_list ) ) {
         $METHOD_FAIL->{'lwp'} = 1;
         return;
@@ -577,7 +588,12 @@ sub _lwp_fetch {
     ### special rules apply for file:// uris ###
     $uri->scheme( $self->scheme );
     $uri->host( $self->scheme eq 'file' ? '' : $self->host );
-    $uri->userinfo("anonymous:$FROM_EMAIL") if $self->scheme ne 'file';
+
+    if ($self->userinfo) {
+        $uri->userinfo($self->userinfo);
+    } elsif ($self->scheme ne 'file') {
+        $uri->userinfo("anonymous:$FROM_EMAIL");
+    }
 
     ### set up the useragent object
     my $ua = LWP::UserAgent->new();
@@ -616,6 +632,8 @@ sub _httptiny_fetch {
 
     };
 
+    ### Fix CVE-2016-1238 ###
+    local $Module::Load::Conditional::FORCE_SAFE_INC = 1;
     unless( can_load(modules => $use_list) ) {
         $METHOD_FAIL->{'httptiny'} = 1;
         return;
@@ -652,9 +670,11 @@ sub _httplite_fetch {
     ### modules required to download with lwp ###
     my $use_list = {
         'HTTP::Lite'    => '2.2',
-
+        'MIME::Base64'  => '0',
     };
 
+    ### Fix CVE-2016-1238 ###
+    local $Module::Load::Conditional::FORCE_SAFE_INC = 1;
     unless( can_load(modules => $use_list) ) {
         $METHOD_FAIL->{'httplite'} = 1;
         return;
@@ -669,6 +689,11 @@ sub _httplite_fetch {
       # Naughty naughty but there isn't any accessor/setter
       $http->{timeout} = $TIMEOUT if $TIMEOUT;
       $http->http11_mode(1);
+
+      if ($self->userinfo) {
+          my $encoded = MIME::Base64::encode($self->userinfo, '');
+          $http->add_req_header("Authorization", "Basic $encoded");
+      }
 
       my $fh = FileHandle->new;
 
@@ -730,6 +755,8 @@ sub _iosock_fetch {
         'IO::Select'       => '0.0',
     };
 
+    ### Fix CVE-2016-1238 ###
+    local $Module::Load::Conditional::FORCE_SAFE_INC = 1;
     unless( can_load(modules => $use_list) ) {
         $METHOD_FAIL->{'iosock'} = 1;
         return;
@@ -813,6 +840,8 @@ sub _netftp_fetch {
     ### required modules ###
     my $use_list = { 'Net::FTP' => 0 };
 
+    ### Fix CVE-2016-1238 ###
+    local $Module::Load::Conditional::FORCE_SAFE_INC = 1;
     unless( can_load( modules => $use_list ) ) {
         $METHOD_FAIL->{'netftp'} = 1;
         return;
@@ -1194,6 +1223,8 @@ sub _curl_fetch {
     ### these long opts are self explanatory - I like that -jmb
     my $cmd = [ $curl, '-q' ];
 
+    push(@$cmd, '-4') if $^O eq 'netbsd' && $FORCEIPV4; # only seen this on NetBSD so far
+
     push(@$cmd, '--connect-timeout', $TIMEOUT) if $TIMEOUT;
 
     push(@$cmd, '--silent') unless $DEBUG;
@@ -1402,6 +1433,52 @@ sub _rsync_fetch {
 
 }
 
+### use git to fetch files
+sub _git_fetch {
+    my $self = shift;
+    my %hash = @_;
+
+    my ($to);
+    my $tmpl = {
+        to  => { required => 1, store => \$to }
+    };
+    check( $tmpl, \%hash ) or return;
+    my $git;
+    unless ( $git = can_run('git') ) {
+        $METHOD_FAIL->{'git'} = 1;
+        return;
+    }
+
+    my $cmd = [ $git, 'clone' ];
+
+    #push(@$cmd, '--timeout=' . $TIMEOUT) if $TIMEOUT;
+
+    push(@$cmd, '--quiet') unless $DEBUG;
+
+    ### DO NOT quote things for IPC::Run, it breaks stuff.
+    push @$cmd, $self->uri, $to;
+
+    ### with IPC::Cmd > 0.41, this is fixed in teh library,
+    ### and there's no need for special casing any more.
+    ### DO NOT quote things for IPC::Run, it breaks stuff.
+    # $IPC::Cmd::USE_IPC_RUN
+    #    ? ($to, $self->uri)
+    #    : (QUOTE. $to .QUOTE, QUOTE. $self->uri .QUOTE);
+
+    my $captured;
+    unless(run( command => $cmd,
+                buffer  => \$captured,
+                verbose => $DEBUG )
+    ) {
+
+        return $self->_error(loc("Command %1 failed: %2",
+            "@$cmd" || '', $captured || ''));
+    }
+
+    return $to;
+
+}
+
 #################################
 #
 # Error code
@@ -1451,9 +1528,10 @@ Below is a mapping of what utilities will be used in what order
 for what schemes, if available:
 
     file    => LWP, lftp, file
-    http    => LWP, HTTP::Lite, wget, curl, lftp, fetch, lynx, iosock
+    http    => LWP, HTTP::Tiny, wget, curl, lftp, fetch, HTTP::Lite, lynx, iosock
     ftp     => LWP, Net::FTP, wget, curl, lftp, fetch, ncftp, ftp
     rsync   => rsync
+    git     => git
 
 If you'd like to disable the use of one or more of these utilities
 and/or modules, see the C<$BLACKLIST> variable further down.
@@ -1469,6 +1547,8 @@ three platforms.
 
 C<iosock> is a very limited L<IO::Socket::INET> based mechanism for
 retrieving C<http> schemed urls. It doesn't follow redirects for instance.
+
+C<git> only supports C<git://> style urls.
 
 A special note about fetching files from an ftp uri:
 

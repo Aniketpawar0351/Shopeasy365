@@ -1,18 +1,12 @@
 package Moose::Meta::Method::Accessor::Native::Bool::not;
-BEGIN {
-  $Moose::Meta::Method::Accessor::Native::Bool::not::AUTHORITY = 'cpan:STEVAN';
-}
-{
-  $Moose::Meta::Method::Accessor::Native::Bool::not::VERSION = '2.0604';
-}
+our $VERSION = '2.2014';
 
 use strict;
 use warnings;
 
 use Moose::Role;
 
-with 'Moose::Meta::Method::Accessor::Native::Reader' =>
-    { -excludes => ['_maximum_arguments'] };
+with 'Moose::Meta::Method::Accessor::Native::Reader';
 
 sub _maximum_arguments { 0 }
 

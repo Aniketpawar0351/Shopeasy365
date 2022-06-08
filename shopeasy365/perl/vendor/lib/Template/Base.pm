@@ -23,7 +23,7 @@ use strict;
 use warnings;
 use Template::Constants;
 
-our $VERSION = 2.78;
+our $VERSION = '3.009';
 
 
 #------------------------------------------------------------------------
@@ -74,7 +74,7 @@ sub new {
 # package variable $ERROR (class method) or internal member 
 # $self->{ _ERROR } (object method).  The presence of parameters indicates
 # that the error value should be set.  Undef is then returned.  In the
-# abscence of parameters, the current error value is returned.
+# absence of parameters, the current error value is returned.
 #------------------------------------------------------------------------
 
 sub error {
@@ -115,7 +115,7 @@ sub debug {
     my $msg  = join('', @_);
     my ($pkg, $file, $line) = caller();
 
-    unless ($msg =~ /\n$/) {
+    unless (substr($msg,-1) eq "\n") {
         $msg .= ($self->{ DEBUG } & Template::Constants::DEBUG_CALLER)
             ? " at $file line $line\n"
             : "\n";
@@ -138,6 +138,7 @@ sub module_version {
     return ${"${class}::VERSION"};
 }
 
+sub DESTROY { 1 } # noop
 
 1;
 
@@ -238,7 +239,7 @@ is sent to C<STDERR>:
 Objects can set an internal C<DEBUG> value which the C<debug()>
 method will examine.  If this value sets the relevant bits
 to indicate C<DEBUG_CALLER> then the file and line number of
-the caller will be appened to the message.
+the caller will be append to the message.
 
     use Template::Constants qw( :debug );
     

@@ -14,8 +14,6 @@
 * See the License for the specific language governing permissions and
 * limitations under the License.
 */
-
-
 package jsp2.examples.simpletag;
 
 import java.io.IOException;
@@ -31,7 +29,7 @@ import javax.servlet.jsp.tagext.SimpleTagSupport;
  */
 public class ShuffleSimpleTag extends SimpleTagSupport {
     // No need for this to use SecureRandom
-    private static Random random = new Random();
+    private static final Random random = new Random();
 
     private JspFragment fragment1;
     private JspFragment fragment2;

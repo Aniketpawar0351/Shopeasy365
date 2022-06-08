@@ -22,15 +22,13 @@ require Exporter;
 use strict;
 use warnings;
 use Exporter;
-# Perl::MinimumVersion seems to think this is a Perl 5.008ism...
-# use base qw( Exporter );
-use vars qw( @EXPORT_OK %EXPORT_TAGS );
-use vars qw( $DEBUG_OPTIONS @STATUS @ERROR @CHOMP @DEBUG @ISA );
-# ... so we'll do it the Old Skool way just to keep it quiet
-@ISA = qw( Exporter );
 
-our $VERSION = 2.75;
+use base qw( Exporter );
 
+our ( @EXPORT_OK, %EXPORT_TAGS );
+our ( $DEBUG_OPTIONS, @STATUS, @ERROR, @CHOMP, @DEBUG, @ISA );
+
+our $VERSION = '3.009';
 
 #========================================================================
 #                         ----- EXPORTER -----
@@ -39,7 +37,7 @@ our $VERSION = 2.75;
 # STATUS constants returned by directives
 use constant STATUS_OK       =>   0;      # ok
 use constant STATUS_RETURN   =>   1;      # ok, block ended by RETURN
-use constant STATUS_STOP     =>   2;      # ok, stoppped by STOP 
+use constant STATUS_STOP     =>   2;      # ok, stopped by STOP 
 use constant STATUS_DONE     =>   3;      # ok, iterator done
 use constant STATUS_DECLINED =>   4;      # ok, declined to service request
 use constant STATUS_ERROR    => 255;      # error condition
@@ -77,7 +75,7 @@ use constant DEBUG_ALL       => 2047; # everything
 
 # extra debugging flags
 use constant DEBUG_CALLER    => 4096; # add caller file/line
-use constant DEBUG_FLAGS     => 4096; # bitmask to extraxt flags
+use constant DEBUG_FLAGS     => 4096; # bitmask to extract flags
 
 $DEBUG_OPTIONS  = {
     &DEBUG_OFF      => off      => off      => &DEBUG_OFF,
@@ -121,13 +119,12 @@ sub debug_flags {
     my (@flags, $flag, $value);
     $debug = $self unless defined($debug) || ref($self);
     
-    if ($debug =~ /^\d+$/) {
+    if ( $debug !~ tr{0-9}{}c) {
         foreach $flag (@DEBUG) {
-            next if $flag =~ /^DEBUG_(OFF|ALL|FLAGS)$/;
+            next if $flag eq 'DEBUG_OFF' || $flag eq 'DEBUG_ALL' || $flag eq 'DEBUG_FLAGS';
 
             # don't trash the original
-            my $copy = $flag;
-            $flag =~ s/^DEBUG_//;
+            substr($flag,0,6,'') if index($flag,'DEBUG_') == 0;
             $flag = lc $flag;
             return $self->error("no value for flag: $flag")
                 unless defined($value = $DEBUG_OPTIONS->{ $flag });

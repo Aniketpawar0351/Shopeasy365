@@ -1,4 +1,3 @@
-
 package Compress::Raw::Lzma;
 
 use strict ;
@@ -12,8 +11,8 @@ use Carp ;
 use bytes ;
 our ($VERSION, $XS_VERSION, @ISA, @EXPORT, $AUTOLOAD);
 
-$VERSION = '2.060';
-$XS_VERSION = $VERSION; 
+$VERSION = '2.100';
+$XS_VERSION = $VERSION;
 $VERSION = eval $VERSION;
 
 @ISA = qw(Exporter);
@@ -21,10 +20,10 @@ $VERSION = eval $VERSION;
 # names by default without a very good reason. Use EXPORT_OK instead.
 # Do not simply export all your public functions/methods/constants.
 @EXPORT = qw(
-    
+
     LZMA_OK
     LZMA_STREAM_END
-    LZMA_NO_CHECK       	
+    LZMA_NO_CHECK
     LZMA_UNSUPPORTED_CHECK
     LZMA_GET_CHECK
     LZMA_MEM_ERROR
@@ -106,10 +105,10 @@ $VERSION = eval $VERSION;
 
     LZMA_FILTER_SUBBLOCK
 
-    LZMA_SUBFILTER_NONE		
-    LZMA_SUBFILTER_SET		
-    LZMA_SUBFILTER_RUN		
-    LZMA_SUBFILTER_FINISH	
+    LZMA_SUBFILTER_NONE
+    LZMA_SUBFILTER_SET
+    LZMA_SUBFILTER_RUN
+    LZMA_SUBFILTER_FINISH
 
     LZMA_SUBBLOCK_ALIGNMENT_MIN
     LZMA_SUBBLOCK_ALIGNMENT_MAX
@@ -158,11 +157,11 @@ eval {
     require XSLoader;
     XSLoader::load('Compress::Raw::Lzma', $XS_VERSION);
     1;
-} 
+}
 or do {
     require DynaLoader;
     local @ISA = qw(DynaLoader);
-    bootstrap Compress::Raw::Lzma $XS_VERSION ; 
+    bootstrap Compress::Raw::Lzma $XS_VERSION ;
 };
 
 use constant Parse_any      => 0x01;
@@ -185,7 +184,7 @@ use constant OFF_STICKY     => 5 ;
 
 sub ParseParameters
 {
-    my $level = shift || 0 ; 
+    my $level = shift || 0 ;
 
     my $sub = (caller($level + 1))[3] ;
     #local $Carp::CarpLevel = 1 ;
@@ -218,13 +217,13 @@ sub Compress::Raw::Lzma::Parameters::setError
     $self->{Error} = $error ;
     return $retval;
 }
-          
+
 #sub getError
 #{
 #    my $self = shift ;
 #    return $self->{Error} ;
 #}
-          
+
 sub Compress::Raw::Lzma::Parameters::parse
 {
     my $self = shift ;
@@ -243,10 +242,10 @@ sub Compress::Raw::Lzma::Parameters::parse
         @entered = () ;
     }
     elsif (@_ == 1) {
-        my $href = $_[0] ;    
+        my $href = $_[0] ;
         return $self->setError("Expected even number of parameters, got 1")
             if ! defined $href or ! ref $href or ref $href ne "HASH" ;
- 
+
         foreach my $key (keys %$href) {
             push @entered, $key ;
             push @entered, \$href->{$key} ;
@@ -256,7 +255,7 @@ sub Compress::Raw::Lzma::Parameters::parse
         my $count = @_;
         return $self->setError("Expected even number of parameters, got $count")
             if $count % 2 != 0 ;
-        
+
         for my $i (0.. $count / 2 - 1) {
             push @entered, $_[2* $i] ;
             push @entered, \$_[2* $i+1] ;
@@ -271,7 +270,7 @@ sub Compress::Raw::Lzma::Parameters::parse
 
         my ($first_only, $sticky, $type, $value) = @$v ;
         my $x ;
-        $self->_checkType($key, \$value, $type, 0, \$x) 
+        $self->_checkType($key, \$value, $type, 0, \$x)
             or return undef ;
 
         $key = lc $key;
@@ -292,7 +291,7 @@ sub Compress::Raw::Lzma::Parameters::parse
 
         $key =~ s/^-// ;
         my $canonkey = lc $key;
- 
+
         if ($got->{$canonkey} && ($firstTime ||
                                   ! $got->{$canonkey}[OFF_FIRST_ONLY]  ))
         {
@@ -307,7 +306,7 @@ sub Compress::Raw::Lzma::Parameters::parse
         else
           { push (@Bad, $key) }
     }
- 
+
     if (@Bad) {
         my ($bad) = join(", ", @Bad) ;
         return $self->setError("unknown key value(s) @Bad") ;
@@ -351,7 +350,7 @@ sub Compress::Raw::Lzma::Parameters::_checkType
         return $self->setError("Parameter '$key' must be an unsigned int, got '$value'")
             if $validate && $value !~ /^\d+$/;
 
-        $$output = defined $value ? $value : 0 ;    
+        $$output = defined $value ? $value : 0 ;
         return 1;
     }
     elsif ($type & Parse_signed)
@@ -361,19 +360,19 @@ sub Compress::Raw::Lzma::Parameters::_checkType
         return $self->setError("Parameter '$key' must be a signed int, got '$value'")
             if $validate && $value !~ /^-?\d+$/;
 
-        $$output = defined $value ? $value : 0 ;    
+        $$output = defined $value ? $value : 0 ;
         return 1 ;
     }
     elsif ($type & Parse_boolean)
     {
         return $self->setError("Parameter '$key' must be an int, got '$value'")
             if $validate && defined $value && $value !~ /^\d*$/;
-        $$output =  defined $value ? $value != 0 : 0 ;    
+        $$output =  defined $value ? $value != 0 : 0 ;
         return 1;
     }
     elsif ($type & Parse_string)
     {
-        $$output = defined $value ? $value : "" ;    
+        $$output = defined $value ? $value : "" ;
         return 1;
     }
 
@@ -429,14 +428,14 @@ sub Compress::Raw::Lzma::EasyEncoder::new
             {
                 'AppendOutput'  => [1, 1, Parse_boolean,  0],
                 'Bufsize'       => [1, 1, Parse_unsigned, 16 * 1024],
- 
+
                 'Preset'        => [1, 1, Parse_unsigned, LZMA_PRESET_DEFAULT()],
                 'Extreme'       => [1, 1, Parse_boolean, 0],
                 'Check'         => [1, 1, Parse_unsigned, LZMA_CHECK_CRC32()],
             }, @_) ;
 
 
-#    croak "Compress::Raw::Lzma::EasyEncoder::new: Bufsize must be >= 1, you specified " . 
+#    croak "Compress::Raw::Lzma::EasyEncoder::new: Bufsize must be >= 1, you specified " .
 #            $got->value('Bufsize')
 #        unless $got->value('Bufsize') >= 1;
 
@@ -450,7 +449,7 @@ sub Compress::Raw::Lzma::EasyEncoder::new
     }
 
     lzma_easy_encoder($pkg, $flags,
-                $got->value('Bufsize'), 
+                $got->value('Bufsize'),
                 $preset,
                 $got->value('Check')) ;
 
@@ -466,7 +465,7 @@ sub Compress::Raw::Lzma::AloneEncoder::new
                 'AppendOutput'  => [1, 1, Parse_boolean,  0],
                 'Bufsize'       => [1, 1, Parse_unsigned, 16 * 1024],
                 'Filter'        => [1, 1, Parse_any, [] ],
- 
+
             }, @_) ;
 
 
@@ -476,7 +475,7 @@ sub Compress::Raw::Lzma::AloneEncoder::new
     my $filters = Lzma::Filters::validateFilters(1, 0, $got->value('Filter')) ;
     # TODO - check max of 1 filter & it is a reference to Lzma::Filter::Lzma1
 
-    lzma_alone_encoder($pkg, $flags, 
+    lzma_alone_encoder($pkg, $flags,
                        $got->value('Bufsize'),
                        $filters);
 
@@ -493,7 +492,7 @@ sub Compress::Raw::Lzma::StreamEncoder::new
                 'Bufsize'       => [1, 1, Parse_unsigned, 16 * 1024],
                 'Filter'        => [1, 1, Parse_any, [] ],
                 'Check'         => [1, 1, Parse_unsigned, LZMA_CHECK_CRC32()],
- 
+
             }, @_) ;
 
 
@@ -502,7 +501,7 @@ sub Compress::Raw::Lzma::StreamEncoder::new
 
     my $filters = Lzma::Filters::validateFilters(1, 1, $got->value('Filter')) ;
 
-    lzma_stream_encoder($pkg, $flags, 
+    lzma_stream_encoder($pkg, $flags,
                         $got->value('Bufsize'),
                         $filters,
                         $got->value('Check'));
@@ -520,7 +519,7 @@ sub Compress::Raw::Lzma::RawEncoder::new
                 'AppendOutput'  => [1, 1, Parse_boolean,  0],
                 'Bufsize'       => [1, 1, Parse_unsigned, 16 * 1024],
                 'Filter'        => [1, 1, Parse_any, [] ],
- 
+
             }, @_) ;
 
 
@@ -531,9 +530,9 @@ sub Compress::Raw::Lzma::RawEncoder::new
 
     my $filters = Lzma::Filters::validateFilters(1, ! $forZip, $got->value('Filter')) ;
 
-    lzma_raw_encoder($pkg, $flags, 
+    lzma_raw_encoder($pkg, $flags,
                         $got->value('Bufsize'),
-                        $filters, 
+                        $filters,
                         $forZip);
 
 }
@@ -551,7 +550,7 @@ sub Compress::Raw::Lzma::AutoDecoder::new
                         'Bufsize'       => [1, 1, Parse_unsigned, 16 * 1024],
 
                         'MemLimit'      => [1, 1, Parse_unsigned, 128 *1024 *1024],
-                 
+
             }, @_) ;
 
 
@@ -576,7 +575,7 @@ sub Compress::Raw::Lzma::AloneDecoder::new
                         'Bufsize'       => [1, 1, Parse_unsigned, 16 * 1024],
 
                         'MemLimit'      => [1, 1, Parse_unsigned, 128 *1024 *1024],
-                 
+
             }, @_) ;
 
 
@@ -585,8 +584,8 @@ sub Compress::Raw::Lzma::AloneDecoder::new
     $flags |= FLAG_CONSUME_INPUT if $got->value('ConsumeInput') ;
     $flags |= FLAG_LIMIT_OUTPUT if $got->value('LimitOutput') ;
 
-    lzma_alone_decoder($pkg, 
-                       $flags, 
+    lzma_alone_decoder($pkg,
+                       $flags,
                        $got->value('Bufsize'),
                        $got->value('MemLimit'));
 }
@@ -605,7 +604,7 @@ sub Compress::Raw::Lzma::StreamDecoder::new
 
                         'MemLimit'      => [1, 1, Parse_unsigned, 128 *1024 *1024],
                         'Flags'         => [1, 1, Parse_unsigned, 0],
-                 
+
             }, @_) ;
 
 
@@ -614,10 +613,10 @@ sub Compress::Raw::Lzma::StreamDecoder::new
     $flags |= FLAG_CONSUME_INPUT if $got->value('ConsumeInput') ;
     $flags |= FLAG_LIMIT_OUTPUT if $got->value('LimitOutput') ;
 
-    lzma_stream_decoder($pkg, 
-                        $flags, 
-                        $got->value('Bufsize'), 
-                        $got->value('MemLimit'), 
+    lzma_stream_decoder($pkg,
+                        $flags,
+                        $got->value('Bufsize'),
+                        $got->value('MemLimit'),
                         $got->value('Flags'));
 }
 
@@ -642,12 +641,12 @@ sub Compress::Raw::Lzma::RawDecoder::new
     $flags |= FLAG_CONSUME_INPUT if $got->value('ConsumeInput') ;
     $flags |= FLAG_LIMIT_OUTPUT if $got->value('LimitOutput') ;
 
-    my $filters = Lzma::Filters::validateFilters(0, ! defined $got->value('Properties'), 
+    my $filters = Lzma::Filters::validateFilters(0, ! defined $got->value('Properties'),
                             $got->value('Filter')) ;
 
-    lzma_raw_decoder($pkg, 
-                        $flags, 
-                        $got->value('Bufsize'), 
+    lzma_raw_decoder($pkg,
+                        $flags,
+                        $got->value('Bufsize'),
                         $filters,
                         $got->value('Properties'));
 }
@@ -660,7 +659,7 @@ sub Compress::Raw::Lzma::RawDecoder::new
 #   Pb
 #   Mode LZMA_MODE_FAST, LZMA_MODE_NORMAL
 #   Nice
-#   Mf LZMA_MF_HC3 LZMA_MF_HC4 LZMA_MF_BT2 LZMA_MF_BT3 LZMA_MF_BT4 
+#   Mf LZMA_MF_HC3 LZMA_MF_HC4 LZMA_MF_BT2 LZMA_MF_BT3 LZMA_MF_BT4
 #   Depth
 
 # BCJ
@@ -724,14 +723,16 @@ sub Lzma::Filters::validateFilters
     use Scalar::Util qw(blessed );
 
     my $encoding = shift; # not decoding
-    my $lzma2 = shift; 
+    my $lzma2 = shift;
 
-    my $objType = $lzma2 ? "Lzma::Filter::Lzma2"
-                         : "Lzma::Filter::Lzma" ;
+    # my $objType = $lzma2 ? "Lzma::Filter::Lzma2"
+    #                      : "Lzma::Filter::Lzma" ;
+
+    my $objType =  "Lzma::Filter::Lzma" ;
 
     # if only one, convert into an array reference
     if (blessed $_[0] )  {
-        die "filter object $_[0] is not an $objType object" 
+        die "filter object $_[0] is not an $objType object"
             unless UNIVERSAL::isa($_[0], $objType);
 
             #$_[0] = [ $_[0] ] ;
@@ -753,13 +754,13 @@ sub Lzma::Filters::validateFilters
     # check that filters are supported
     # check memory requirements
     # need exactly one lzma1/2 filter
-    # lzma1/2 is the last thing in the list 
+    # lzma1/2 is the last thing in the list
     for (my $i = 0; $i <  @$filters ; ++$i)
     {
         my $filt = $filters->[$i];
-        die "filter is not an Lzma::Filter object" 
+        die "filter is not an Lzma::Filter object"
             unless UNIVERSAL::isa($filt, 'Lzma::Filter');
-        die "Lzma filter must be last" 
+        die "Lzma filter must be last"
             if UNIVERSAL::isa($filt, 'Lzma::Filter::Lzma') && $i < $count -1 ;
 
         #die "xxx" unless lzma_filter_encoder_is_supported($filt->id());
@@ -787,7 +788,7 @@ sub Lzma::Filter::Lzma::mk
     my $got = Compress::Raw::Lzma::ParseParameters(0,
         {
             'DictSize' => [1, 1, Parse_unsigned(), LZMA_DICT_SIZE_DEFAULT()],
-            #'PreserDict' => [1, 1, Parse_unsigned(), undef],
+            'PresetDict' => [1, 1, Parse_string(), undef],
             'Lc'    => [1, 1, Parse_unsigned(), LZMA_LC_DEFAULT()],
             'Lp'    => [1, 1, Parse_unsigned(), LZMA_LP_DEFAULT()],
             'Pb'    => [1, 1, Parse_unsigned(), LZMA_PB_DEFAULT()],
@@ -801,7 +802,7 @@ sub Lzma::Filter::Lzma::mk
 
     my $DictSize = $got->value('DictSize');
     die "Dictsize $DictSize not in range 4KiB - 1536Mib"
-        if $DictSize < 1024 * 4 || 
+        if $DictSize < 1024 * 4 ||
            $DictSize > 1024 * 1024 * 1536 ;
 
     my $Lc = $got->value('Lc');
@@ -825,7 +826,7 @@ sub Lzma::Filter::Lzma::mk
 
     my $Mf = $got->value('Mf');
     die "Mf $Mf not valid"
-        if ! grep { $Mf == $_ } 
+        if ! grep { $Mf == $_ }
              ( LZMA_MF_HC3(),
                LZMA_MF_HC4(),
                LZMA_MF_BT2(),
@@ -836,7 +837,7 @@ sub Lzma::Filter::Lzma::mk
     die "Nice $Nice not in range 2-273"
         if $Nice < 2 || $Nice > 273;
 
-    my $obj = Lzma::Filter::Lzma::_mk($type, 
+    my $obj = Lzma::Filter::Lzma::_mk($type,
                             $DictSize,
                             $Lc,
                             $Lp,
@@ -845,12 +846,13 @@ sub Lzma::Filter::Lzma::mk
                             $Nice,
                             $Mf,
                             $got->value('Depth'),
-                        );    
+                            $got->value('PresetDict'),
+                        );
 
     bless $obj, $pkg
         if defined $obj;
 
-    $obj;    
+    $obj;
 }
 
 sub Lzma::Filter::Lzma::mkPreset
@@ -860,37 +862,36 @@ sub Lzma::Filter::Lzma::mkPreset
     my $preset = shift;
     my $pkg = (caller(1))[3] ;
 
-    my $obj = Lzma::Filter::Lzma::_mkPreset($type, $preset);    
+    my $obj = Lzma::Filter::Lzma::_mkPreset($type, $preset);
 
     bless $obj, $pkg
         if defined $obj;
 
-    $obj;    
+    $obj;
 }
 
 @Lzma::Filter::Lzma1::ISA = qw(Lzma::Filter::Lzma);
 sub Lzma::Filter::Lzma1
 {
-    Lzma::Filter::Lzma::mk(0, @_);    
+    Lzma::Filter::Lzma::mk(0, @_);
 }
 
 @Lzma::Filter::Lzma1::Preset::ISA = qw(Lzma::Filter::Lzma);
 sub Lzma::Filter::Lzma1::Preset
 {
-    Lzma::Filter::Lzma::mkPreset(0, @_);    
+    Lzma::Filter::Lzma::mkPreset(0, @_);
 }
-
 
 @Lzma::Filter::Lzma2::ISA = qw(Lzma::Filter::Lzma);
 sub Lzma::Filter::Lzma2
 {
-    Lzma::Filter::Lzma::mk(1, @_);    
+    Lzma::Filter::Lzma::mk(1, @_);
 }
 
 @Lzma::Filter::Lzma2::Preset::ISA = qw(Lzma::Filter::Lzma);
 sub Lzma::Filter::Lzma2::Preset
 {
-    Lzma::Filter::Lzma::mkPreset(1, @_);    
+    Lzma::Filter::Lzma::mkPreset(1, @_);
 }
 
 @Lzma::Filter::BCJ::ISA = qw(Lzma::Filter);
@@ -908,49 +909,49 @@ sub Lzma::Filter::BCJ::mk
     bless $obj, $pkg
         if defined $obj;
 
-    $obj;    
+    $obj;
 }
 
 @Lzma::Filter::X86::ISA = qw(Lzma::Filter::BCJ);
 
 sub Lzma::Filter::X86
 {
-    Lzma::Filter::BCJ::mk(LZMA_FILTER_X86(), @_);    
+    Lzma::Filter::BCJ::mk(LZMA_FILTER_X86(), @_);
 }
 
 @Lzma::Filter::PowerPC::ISA = qw(Lzma::Filter::BCJ);
 
 sub Lzma::Filter::PowerPC
 {
-    Lzma::Filter::BCJ::mk(LZMA_FILTER_POWERPC(), @_);    
+    Lzma::Filter::BCJ::mk(LZMA_FILTER_POWERPC(), @_);
 }
 
 @Lzma::Filter::IA64::ISA = qw(Lzma::Filter::BCJ);
 
 sub Lzma::Filter::IA64
 {
-    Lzma::Filter::BCJ::mk(LZMA_FILTER_IA64(), @_);    
+    Lzma::Filter::BCJ::mk(LZMA_FILTER_IA64(), @_);
 }
 
 @Lzma::Filter::ARM::ISA = qw(Lzma::Filter::BCJ);
 
 sub Lzma::Filter::ARM
 {
-    Lzma::Filter::BCJ::mk(LZMA_FILTER_ARM(), @_);    
+    Lzma::Filter::BCJ::mk(LZMA_FILTER_ARM(), @_);
 }
 
 @Lzma::Filter::ARMThumb::ISA = qw(Lzma::Filter::BCJ);
 
 sub Lzma::Filter::ARMThumb
 {
-    Lzma::Filter::BCJ::mk(LZMA_FILTER_ARMTHUMB(), @_);    
+    Lzma::Filter::BCJ::mk(LZMA_FILTER_ARMTHUMB(), @_);
 }
 
 @Lzma::Filter::Sparc::ISA = qw(Lzma::Filter::BCJ);
 
 sub Lzma::Filter::Sparc
 {
-    Lzma::Filter::BCJ::mk(LZMA_FILTER_SPARC(), @_);    
+    Lzma::Filter::BCJ::mk(LZMA_FILTER_SPARC(), @_);
 }
 
 
@@ -989,32 +990,32 @@ Compress::Raw::Lzma - Low-Level Interface to lzma compression library
     # Encoders
     my ($lz, $status) = new Compress::Raw::Lzma::EasyEncoder [OPTS]
         or die "Cannot create lzma object: $status\n";
-    
+
     my ($lz, $status) = new Compress::Raw::Lzma::AloneEncoder [OPTS]
         or die "Cannot create lzma object: $status\n";
-    
+
     my ($lz, $status) = new Compress::Raw::Lzma::StreamEncoder [OPTS]
         or die "Cannot create lzma object: $status\n";
-    
+
     my ($lz, $status) = new Compress::Raw::Lzma::RawEncoder [OPTS]
         or die "Cannot create lzma object: $status\n";
-    
+
     $status = $lz->code($input, $output);
     $status = $lz->flush($output);
 
     # Decoders
     my ($lz, $status) = new Compress::Raw::Lzma::AloneDecoder [OPTS]
         or die "Cannot create bunzip2 object: $status\n";
-    
+
     my ($lz, $status) = new Compress::Raw::Lzma::AutoDecoder [OPTS]
         or die "Cannot create bunzip2 object: $status\n";
-    
+
     my ($lz, $status) = new Compress::Raw::Lzma::StreamDecoder [OPTS]
         or die "Cannot create bunzip2 object: $status\n";
-    
+
     my ($lz, $status) = new Compress::Raw::Lzma::RawDecoder [OPTS]
         or die "Cannot create bunzip2 object: $status\n";
-    
+
     $status = $lz->code($input, $output);
 
     my $version = Compress::Raw::Lzma::lzma_version_number();
@@ -1023,12 +1024,19 @@ Compress::Raw::Lzma - Low-Level Interface to lzma compression library
 =head1 DESCRIPTION
 
 C<Compress::Raw::Lzma> provides an interface to the in-memory
-compression/uncompression functions from the lzma compression library. 
+compression/uncompression functions from the lzma compression library.
 
 Although the primary purpose for the existence of C<Compress::Raw::Lzma> is
 for use by the  C<IO::Compress::Lzma>, C<IO::Uncompress::UnLzma>,
 C<IO::Compress::Xz> and C<IO::Uncompress::UnXz> modules, it can be used on
 its own for simple compression/uncompression tasks.
+
+There are two functions, called C<code> and C<flush>, used in all the
+compression and uncompression interfaces defined in this module. By default
+both of these functions overwrites any data stored in its output buffer
+parameter. If you want to compress/uncompress to a single buffer, and have
+C<code> and C<flush> append to that buffer, enable the C<AppendOutput>
+option when you create the compression/decompression object.
 
 =head1 Compression
 
@@ -1045,7 +1053,7 @@ There are four compression interfaces available in this module.
 
 =head2 ($z, $status) = new Compress::Raw::Lzma::EasyEncoder [OPTS];
 
-Creates a new I<xz> compression object. 
+Creates a new I<xz> compression object.
 
 If successful, it will return the initialised compression object, C<$z>
 and a C<$status> of C<LZMA_OK> in a list context. In scalar context it
@@ -1067,7 +1075,7 @@ Valid values are 0-9 and C<LZMA_PRESET_DEFAULT>.
 0 is the fastest compression with the lowest memory usage and the lowest
 compression.
 
-9 is the slowest compession with the highest memory usage but with the best
+9 is the slowest compression with the highest memory usage but with the best
 compression.
 
 Defaults to C<LZMA_PRESET_DEFAULT>.
@@ -1080,7 +1088,7 @@ Defaults to 0.
 
 =item B<< Check => $check >>
 
-Used to specify the integrrity check used in the xz data stream.
+Used to specify the integrity check used in the xz data stream.
 Valid values are C<LZMA_CHECK_NONE>, C<LZMA_CHECK_CRC32>,
 C<LZMA_CHECK_CRC64>, C<LZMA_CHECK_SHA256>.
 
@@ -1091,7 +1099,9 @@ Defaults to C<LZMA_CHECK_CRC32>.
 Controls whether the compressed data is appended to the output buffer in
 the C<code> and C<flush> methods.
 
-Defaults to 1.
+Defaults to 0.
+(Note in versions of this module prior to 2.072 the default value was
+incorrectly documented as 1).
 
 =item B<< BufSize => $number >>
 
@@ -1122,7 +1132,7 @@ Below is a list of the valid options:
 =item B<< Filter => $filter >>
 
 The C< $filter > option must be an object of type C<Lzma::Filter::Lzma1>.
-See L<Compress::Raw::Lzma/Lzma::Filter::Lzma> for a definition 
+See L<Compress::Raw::Lzma/Lzma::Filter::Lzma> for a definition
 of C<Lzma::Filter::Lzma1>.
 
 If this option is not present an C<Lzma::Filter::Lzma1> object with default
@@ -1133,7 +1143,9 @@ values will be used.
 Controls whether the compressed data is appended to the output buffer in
 the C<code> and C<flush> methods.
 
-Defaults to 1.
+Defaults to 0.
+(Note in versions of this module prior to 2.072 the default value was
+incorrectly documented as 1).
 
 =item B<< BufSize => $number >>
 
@@ -1147,7 +1159,7 @@ Defaults to 16k.
 
 =head2 ($z, $status) = new Compress::Raw::Lzma::StreamEncoder [OPTS];
 
-Creates a I<xz> compression object. 
+Creates a I<xz> compression object.
 
 If successful, it will return the initialised compression object, C<$z>
 and a C<$status> of C<LZMA_OK> in a list context. In scalar context it
@@ -1169,7 +1181,7 @@ during compression. See L</Filters> for more details on the available
 filters.
 
 If this option is present it must either contain a single
-C<Lzma::Filter::Lzma> filter object or an array reference containing between 
+C<Lzma::Filter::Lzma> filter object or an array reference containing between
 one and C<LZMA_FILTERS_MAX> filter objects.
 
 If this option is not present an C<Lzma::Filter::Lzma2> object with default
@@ -1177,7 +1189,7 @@ values will be used.
 
 =item B<< Check => $check >>
 
-Used to specify the integrrity check used in the xz data stream.
+Used to specify the integrity check used in the xz data stream.
 Valid values are C<LZMA_CHECK_NONE>, C<LZMA_CHECK_CRC32>,
 C<LZMA_CHECK_CRC64>, C<LZMA_CHECK_SHA256>.
 
@@ -1188,7 +1200,9 @@ Defaults to C<LZMA_CHECK_CRC32>.
 Controls whether the compressed data is appended to the output buffer in
 the C<code> and C<flush> methods.
 
-Defaults to 1.
+Defaults to 0.
+(Note in versions of this module prior to 2.072 the default value was
+incorrectly documented as 1).
 
 =item B<< BufSize => $number >>
 
@@ -1224,7 +1238,7 @@ during compression. See L</Filters> for more details on the available
 filters.
 
 If this option is present it must either contain a single
-C<Lzma::Filter::Lzma> filter object or an array reference containing between 
+C<Lzma::Filter::Lzma> filter object or an array reference containing between
 one and C<LZMA_FILTERS_MAX> filter objects.
 
 If this option is not present an C<Lzma::Filter::Lzma2> object with default
@@ -1235,7 +1249,9 @@ values will be used.
 Controls whether the compressed data is appended to the output buffer in
 the C<code> and C<flush> methods.
 
-Defaults to 1.
+Defaults to 0.
+(Note in versions of this module prior to 2.072 the default value was
+incorrectly documented as 1).
 
 =item B<< BufSize => $number >>
 
@@ -1347,7 +1363,7 @@ This option defaults to true.
 
 The C<LimitOutput> option changes the behavior of the C<< $i->code >>
 method so that the amount of memory used by the output buffer can be
-limited. 
+limited.
 
 When C<LimitOutput> is used the size of the output buffer used will either
 be the value of the C<Bufsize> option or the amount of memory already
@@ -1425,7 +1441,7 @@ This option defaults to true.
 
 The C<LimitOutput> option changes the behavior of the C<< $i->code >>
 method so that the amount of memory used by the output buffer can be
-limited. 
+limited.
 
 When C<LimitOutput> is used the size of the output buffer used will either
 be the value of the C<Bufsize> option or the amount of memory already
@@ -1448,7 +1464,7 @@ needed and how to use it.
 
 =head2 $status = $z->code($input, $output);
 
-Uncompresses C<$input> and writes the uncompressed data to C<$output>. 
+Uncompresses C<$input> and writes the uncompressed data to C<$output>.
 
 Returns C<LZMA_OK> if the uncompression was successful, but the end of the
 compressed data stream has not been reached. Returns C<LZMA_STREAM_END> on
@@ -1483,7 +1499,7 @@ All Lzma Filters are sub-classed from the C<Lzma::Filter> base-class.
 The C<Lzma::Filter::Lzma> class is used to... TODO - more here
 
 There are two subclasses of C<Lzma::Filter::Lzma>, namely
-C<Lzma::Filter::Lzma1> and C<Lzma::Filter::Lzma2>. 
+C<Lzma::Filter::Lzma1> and C<Lzma::Filter::Lzma2>.
 
 The former is typically used with C<Compress::Raw::Lzma::AloneEncoder>.
 The latter with C<Compress::Raw::Lzma::StreamEncoder>.
@@ -1498,12 +1514,24 @@ The C<Lzma::Filter::Lzma> construction takes the following options.
 
 =item DictSize => $value
 
-Dictionary size in bytes. This controls 
+Dictionary size in bytes. This controls
 how many bytes of the recently processed
 uncompressed data is kept in memory. The size of the dictionary must be at
 least C<LZMA_DICT_SIZE_MIN>.
 
 Defaults to C<LZMA_DICT_SIZE_DEFAULT>.
+
+=item PresetDict => $dict
+
+Provide an initial dictionary. This value is used to initialize the LZ77 history window.
+
+This feature only works correctly with raw encoding and decoding.
+You may not be able to decode other formats that have been encoded with a preset dictionary.
+
+C<$dict> should contain typical strings that occur in the files being compressed,
+with the most probably strings near the end fo the preset dictionary.
+
+If C<$dict> is larger than C<DictSize>, only the last C<DictSize> bytes are processed.
 
 =item Lc => $value
 
@@ -1515,7 +1543,7 @@ account when predicting the bits of the next literal.
 
 C<$value> must be a number between C<LZMA_LCLP_MIN> and
 C<LZMA_LCLP_MAX>.
-	 
+
 Note the sum of the C<Lc> and C<Lp> options cannot exceed 4.
 
 Defaults to C<LZMA_LC_DEFAULT>.
@@ -1578,7 +1606,7 @@ Defaults to 0.
 
 The sub-classes of C<Lzma::Filter::BCJ> are the
 Branch/Call/Jump conversion filters. These filters are used to rewrite
-executable binary code for a number of processor acchitectures. 
+executable binary code for a number of processor architectures.
 None of these classes take any options.
 
 =over 5
@@ -1619,7 +1647,7 @@ Usage is
 
 =item Type => $type
 
-Defines the type of Delta caclulation. The only available type (and
+Defines the type of Delta calculation. The only available type (and
 therefore the default) is
 C<LZMA_DELTA_TYPE_BYTE>,
 
@@ -1636,13 +1664,23 @@ Default is C<LZMA_DELTA_DIST_MIN>.
 
 =head2 my $version = Compress::Raw::Lzma::lzma_version_number();
 
-Returns the version of the underlying lzma library.
+Returns the version of the underlying lzma library this module is using at
+run-time as a number.
 
 =head2 my $version = Compress::Raw::Lzma::lzma_version_string();
 
-Returns the version of the underlying lzma library.
+Returns the version of the underlying lzma library this module is using at
+run-time as a string.
 
-TODO - more here
+=head2 my $version = Compress::Raw::Lzma::LZMA_VERSION();
+
+Returns the version of the underlying lzma library this module was using at
+compile-time as a number.
+
+=head2 my $version = Compress::Raw::Lzma::LZMA_VERSION_STRING();
+
+Returns the version of the underlying lzma library this module was using at
+compile-time as a string.
 
 =head1 Constants
 
@@ -1650,9 +1688,15 @@ The following lzma constants are exported by this module
 
 TODO - more here
 
+=head1 SUPPORT
+
+General feedback/questions/bug reports should be sent to
+L<https://github.com/pmqs/Compress-Raw-Lzma/issues> (preferred) or
+L<https://rt.cpan.org/Public/Dist/Display.html?Name=Compress-Raw-Lzma>.
+
 =head1 SEE ALSO
 
-L<Compress::Zlib>, L<IO::Compress::Gzip>, L<IO::Uncompress::Gunzip>, L<IO::Compress::Deflate>, L<IO::Uncompress::Inflate>, L<IO::Compress::RawDeflate>, L<IO::Uncompress::RawInflate>, L<IO::Compress::Bzip2>, L<IO::Uncompress::Bunzip2>, L<IO::Compress::Lzma>, L<IO::Uncompress::UnLzma>, L<IO::Compress::Xz>, L<IO::Uncompress::UnXz>, L<IO::Compress::Lzop>, L<IO::Uncompress::UnLzop>, L<IO::Compress::Lzf>, L<IO::Uncompress::UnLzf>, L<IO::Uncompress::AnyInflate>, L<IO::Uncompress::AnyUncompress>
+L<Compress::Zlib>, L<IO::Compress::Gzip>, L<IO::Uncompress::Gunzip>, L<IO::Compress::Deflate>, L<IO::Uncompress::Inflate>, L<IO::Compress::RawDeflate>, L<IO::Uncompress::RawInflate>, L<IO::Compress::Bzip2>, L<IO::Uncompress::Bunzip2>, L<IO::Compress::Lzma>, L<IO::Uncompress::UnLzma>, L<IO::Compress::Xz>, L<IO::Uncompress::UnXz>, L<IO::Compress::Lzip>, L<IO::Uncompress::UnLzip>, L<IO::Compress::Lzop>, L<IO::Uncompress::UnLzop>, L<IO::Compress::Lzf>, L<IO::Uncompress::UnLzf>, L<IO::Compress::Zstd>, L<IO::Uncompress::UnZstd>, L<IO::Uncompress::AnyInflate>, L<IO::Uncompress::AnyUncompress>
 
 L<IO::Compress::FAQ|IO::Compress::FAQ>
 
@@ -1662,7 +1706,7 @@ L<IO::Zlib|IO::Zlib>
 
 =head1 AUTHOR
 
-This module was written by Paul Marquess, F<pmqs@cpan.org>. 
+This module was written by Paul Marquess, C<pmqs@cpan.org>.
 
 =head1 MODIFICATION HISTORY
 
@@ -1670,8 +1714,7 @@ See the Changes file.
 
 =head1 COPYRIGHT AND LICENSE
 
-Copyright (c) 2005-2013 Paul Marquess. All rights reserved.
+Copyright (c) 2005-2021 Paul Marquess. All rights reserved.
 
 This program is free software; you can redistribute it and/or
 modify it under the same terms as Perl itself.
-

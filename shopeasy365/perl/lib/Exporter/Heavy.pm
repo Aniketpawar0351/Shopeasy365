@@ -38,8 +38,13 @@ sub _rebuild_cache {
 
 sub heavy_export {
 
+    # Save the old __WARN__ handler in case it was defined
+    my $oldwarn = $SIG{__WARN__};
+
     # First make import warnings look like they're coming from the "use".
     local $SIG{__WARN__} = sub {
+	# restore it back so proper stacking occurs
+	local $SIG{__WARN__} = $oldwarn;
 	my $text = shift;
 	if ($text =~ s/ at \S*Exporter\S*.pm line \d+.*\n//) {
 	    require Carp;
@@ -143,7 +148,7 @@ sub heavy_export {
 		    if (!$export_cache->{$sym}) {
 			# accumulate the non-exports
 			push @carp,
-			  qq["$sym" is not exported by the $pkg module\n];
+			  qq["$sym" is not exported by the $pkg module];
 			$oops++;
 		    }
 		}
@@ -151,7 +156,7 @@ sub heavy_export {
 	}
 	if ($oops) {
 	    require Carp;
-	    Carp::croak("@{carp}Can't continue after import errors");
+	    Carp::croak(join("\n", @carp, "Can't continue after import errors"));
 	}
     }
     else {

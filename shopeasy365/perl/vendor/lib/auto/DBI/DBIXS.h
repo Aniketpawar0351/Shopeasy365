@@ -1,6 +1,6 @@
 /* vim: ts=8:sw=4:expandtab
  *
- * $Id: DBIXS.h 15268 2012-04-18 11:34:59Z timbo $
+ * $Id$
  *
  * Copyright (c) 1994-2010  Tim Bunce  Ireland
  *
@@ -35,13 +35,14 @@
 #include "dbixs_rev.h"
 
 /* Perl backwards compatibility definitions */
+#define NEED_sv_2pv_flags
 #include "dbipport.h"
 
 /* DBI SQL_* type definitions */
 #include "dbi_sql.h"
 
 
-#define DBIXS_VERSION 93 /* superceeded by DBIXS_REVISION */
+#define DBIXS_VERSION 93 /* superseded by DBIXS_REVISION */
 
 #ifdef NEED_DBIXS_VERSION
 #if NEED_DBIXS_VERSION > DBIXS_VERSION
@@ -287,6 +288,7 @@ typedef struct {                /* -- FIELD DESCRIPTOR --               */
 #define DBIcf_PrintWarn   0x100000      /* warn() on warning (err="0")          */
 #define DBIcf_Callbacks   0x200000      /* has Callbacks attribute hash         */
 #define DBIcf_AIADESTROY  0x400000      /* auto DBIcf_IADESTROY if pid changes  */
+#define DBIcf_RaiseWarn   0x800000      /* throw exception (croak) on warn      */
 /* NOTE: new flags may require clone() to be updated */
 
 #define DBIcf_INHERITMASK               /* what NOT to pass on to children */   \

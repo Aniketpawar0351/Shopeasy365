@@ -7,6 +7,9 @@ about pod in pod/perlpod.pod or the short summary in the INSTALL file.
 
 perlbs2000 - building and installing Perl for BS2000.
 
+B<This document needs to be updated, but we don't know what it should say.
+Please submit comments to L<https://github.com/Perl/perl5/issues>.>
+
 =head1 SYNOPSIS
 
 This document will help you Configure, build, test and install Perl
@@ -218,18 +221,17 @@ L<INSTALL>, L<perlport>.
 
 =head2 Mailing list
 
-If you are interested in the VM/ESA, z/OS (formerly known as OS/390)
+If you are interested in the z/OS (formerly known as OS/390)
 and POSIX-BC (BS2000) ports of Perl then see the perl-mvs mailing list.
 To subscribe, send an empty message to perl-mvs-subscribe@perl.org.
 
 See also:
 
-    http://lists.perl.org/list/perl-mvs.html
+    https://lists.perl.org/list/perl-mvs.html
 
 There are web archives of the mailing list at:
 
-    http://www.xray.mpe.mpg.de/mailing-lists/perl-mvs/
-    http://archive.develooper.com/perl-mvs@perl.org/
+    https://www.nntp.perl.org/group/perl.mvs/
 
 =head1 HISTORY
 

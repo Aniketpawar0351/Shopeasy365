@@ -23,21 +23,22 @@ require Exporter;
 use strict;
 use vars qw[$DEBUG $error $VERSION $WARN $FOLLOW_SYMLINK $CHOWN $CHMOD
             $DO_NOT_USE_PREFIX $HAS_PERLIO $HAS_IO_STRING $SAME_PERMISSIONS
-            $INSECURE_EXTRACT_MODE $ZERO_PAD_NUMBERS @ISA @EXPORT
+            $INSECURE_EXTRACT_MODE $ZERO_PAD_NUMBERS @ISA @EXPORT $RESOLVE_SYMLINK
          ];
 
 @ISA                    = qw[Exporter];
-@EXPORT                 = qw[ COMPRESS_GZIP COMPRESS_BZIP ];
+@EXPORT                 = qw[ COMPRESS_GZIP COMPRESS_BZIP COMPRESS_XZ ];
 $DEBUG                  = 0;
 $WARN                   = 1;
 $FOLLOW_SYMLINK         = 0;
-$VERSION                = "1.90";
+$VERSION                = "2.38";
 $CHOWN                  = 1;
 $CHMOD                  = 1;
 $SAME_PERMISSIONS       = $> == 0 ? 1 : 0;
 $DO_NOT_USE_PREFIX      = 0;
 $INSECURE_EXTRACT_MODE  = 0;
 $ZERO_PAD_NUMBERS       = 0;
+$RESOLVE_SYMLINK        = $ENV{'PERL5_AT_RESOLVE_SYMLINK'} || 'speed';
 
 BEGIN {
     use Config;
@@ -47,7 +48,7 @@ BEGIN {
     ### switch between perlio and IO::String
     $HAS_IO_STRING = eval {
         require IO::String;
-        import IO::String;
+        IO::String->import;
         1;
     } || 0;
 }
@@ -75,6 +76,7 @@ Archive::Tar - module for manipulations of tar archives
     $tar->write('files.tar');                   # plain tar
     $tar->write('files.tgz', COMPRESS_GZIP);    # gzip compressed
     $tar->write('files.tbz', COMPRESS_BZIP);    # bzip2 compressed
+    $tar->write('files.txz', COMPRESS_XZ);      # xz compressed
 
 =head1 DESCRIPTION
 
@@ -146,12 +148,13 @@ backwards compatibility. Archive::Tar now looks at the file
 magic to determine what class should be used to open the file
 and will transparently Do The Right Thing.
 
-Archive::Tar will warn if you try to pass a bzip2 compressed file and the
-IO::Zlib / IO::Uncompress::Bunzip2 modules are not available and simply return.
+Archive::Tar will warn if you try to pass a bzip2 / xz compressed file and the
+IO::Uncompress::Bunzip2 / IO::Uncompress::UnXz are not available and simply return.
 
 Note that you can currently B<not> pass a C<gzip> compressed
 filehandle, which is not opened with C<IO::Zlib>, a C<bzip2> compressed
-filehandle, which is not opened with C<IO::Uncompress::Bunzip2>, nor a string
+filehandle, which is not opened with C<IO::Uncompress::Bunzip2>, a C<xz> compressed
+filehandle, which is not opened with C<IO::Uncompress::UnXz>, nor a string
 containing the full archive information (either compressed or
 uncompressed). These are worth while features, but not currently
 implemented. See the C<TODO> section.
@@ -245,16 +248,40 @@ sub _get_handle {
                 return;
             };
 
-            ### read the first 4 bites of the file to figure out which class to
+            ### read the first 6 bytes of the file to figure out which class to
             ### use to open the file.
-            sysread( $tmp, $magic, 4 );
+            sysread( $tmp, $magic, 6 );
             close $tmp;
         }
+
+        ### is it xz?
+        ### if you asked specifically for xz compression, or if we're in
+        ### read mode and the magic numbers add up, use xz
+        if( XZ and (
+               ($compress eq COMPRESS_XZ) or
+               ( MODE_READ->($mode) and $magic =~ XZ_MAGIC_NUM )
+            )
+        ) {
+            if( MODE_READ->($mode) ) {
+                $fh = IO::Uncompress::UnXz->new( $file ) or do {
+                    $self->_error( qq[Could not read '$file': ] .
+                        $IO::Uncompress::UnXz::UnXzError
+                    );
+                    return;
+                };
+            } else {
+                $fh = IO::Compress::Xz->new( $file ) or do {
+                    $self->_error( qq[Could not write to '$file': ] .
+                        $IO::Compress::Xz::XzError
+                    );
+                    return;
+                };
+            }
 
         ### is it bzip?
         ### if you asked specifically for bzip compression, or if we're in
         ### read mode and the magic numbers add up, use bzip
-        if( BZIP and (
+        } elsif( BZIP and (
                 ($compress eq COMPRESS_BZIP) or
                 ( MODE_READ->($mode) and $magic =~ BZIP_MAGIC_NUM )
             )
@@ -262,7 +289,7 @@ sub _get_handle {
 
             ### different reader/writer modules, different error vars... sigh
             if( MODE_READ->($mode) ) {
-                $fh = IO::Uncompress::Bunzip2->new( $file ) or do {
+                $fh = IO::Uncompress::Bunzip2->new( $file, MultiStream => 1 ) or do {
                     $self->_error( qq[Could not read '$file': ] .
                         $IO::Uncompress::Bunzip2::Bunzip2Error
                     );
@@ -428,12 +455,13 @@ sub _read_tar {
 	    } elsif ($filter && $entry->name !~ $filter) {
 		$skip = 1;
 
+	    } elsif ($filter_cb && ! $filter_cb->($entry)) {
+		$skip = 2;
+
 	    ### skip this entry if it's a pax header. This is a special file added
 	    ### by, among others, git-generated tarballs. It holds comments and is
 	    ### not meant for extracting. See #38932: pax_global_header extracted
 	    } elsif ( $entry->name eq PAX_HEADER or $entry->type =~ /^(x|g)$/ ) {
-		$skip = 2;
-	    } elsif ($filter_cb && ! $filter_cb->($entry)) {
 		$skip = 3;
 	    }
 
@@ -485,7 +513,7 @@ sub _read_tar {
                 ### but that doesn't *always* happen.. so check if the last
                 ### character is a control character, and if so remove it
                 ### at any rate, we better remove that character here, or tests
-                ### like 'eq' and hashlook ups based on names will SO not work
+                ### like 'eq' and hash lookups based on names will SO not work
                 ### remove it by calculating the proper size, and then
                 ### tossing out everything that's longer than that size.
 
@@ -518,12 +546,13 @@ sub _read_tar {
 	if ($filter && $entry->name !~ $filter) {
 	    next LOOP;
 
+	} elsif ($filter_cb && ! $filter_cb->($entry)) {
+	    next LOOP;
+
 	### skip this entry if it's a pax header. This is a special file added
 	### by, among others, git-generated tarballs. It holds comments and is
 	### not meant for extracting. See #38932: pax_global_header extracted
 	} elsif ( $entry->name eq PAX_HEADER or $entry->type =~ /^(x|g)$/ ) {
-	    next LOOP;
-	} elsif ($filter_cb && ! $filter_cb->($entry)) {
 	    next LOOP;
 	}
 
@@ -598,6 +627,7 @@ sub extract {
     my $self    = shift;
     my @args    = @_;
     my @files;
+    my $hashmap;
 
     # use the speed optimization for all extracted files
     local($self->{cwd}) = cwd() unless $self->{cwd};
@@ -614,16 +644,15 @@ sub extract {
             ### go find it then
             } else {
 
-                my $found;
-                for my $entry ( @{$self->_data} ) {
-                    next unless $file eq $entry->full_path;
+                # create hash-map once to speed up lookup
+                $hashmap = $hashmap || {
+                    map { $_->full_path, $_ } @{$self->_data}
+                };
 
+                if (exists $hashmap->{$file}) {
                     ### we found the file you're looking for
-                    push @files, $entry;
-                    $found++;
-                }
-
-                unless( $found ) {
+                    push @files, $hashmap->{$file};
+                } else {
                     return $self->_error(
                         qq[Could not find '$file' in archive] );
                 }
@@ -842,9 +871,23 @@ sub _extract_file {
         return;
     }
 
+    ### If a file system already contains a block device with the same name as
+    ### the being extracted regular file, we would write the file's content
+    ### to the block device. So remove the existing file (block device) now.
+    ### If an archive contains multiple same-named entries, the last one
+    ### should replace the previous ones. So remove the old file now.
+    ### If the old entry is a symlink to a file outside of the CWD, the new
+    ### entry would create a file there. This is CVE-2018-12015
+    ### <https://rt.cpan.org/Ticket/Display.html?id=125523>.
+    if (-l $full || -e _) {
+	if (!unlink $full) {
+	    $self->_error( qq[Could not remove old file '$full': $!] );
+	    return;
+	}
+    }
     if( length $entry->type && $entry->is_file ) {
         my $fh = IO::File->new;
-        $fh->open( '>' . $full ) or (
+        $fh->open( $full, '>' ) or (
             $self->_error( qq[Could not open file '$full': $!] ),
             return
         );
@@ -875,7 +918,7 @@ sub _extract_file {
     }
 
     if( $CHOWN && CAN_CHOWN->() and not -l $full ) {
-        chown $entry->uid, $entry->gid, $full or
+        CORE::chown( $entry->uid, $entry->gid, $full ) or
             $self->_error( qq[Could not set uid/gid on '$full'] );
     }
 
@@ -886,7 +929,7 @@ sub _extract_file {
         unless ($SAME_PERMISSIONS) {
             $mode &= ~(oct(7000) | umask);
         }
-        chmod $mode, $full or
+        CORE::chmod( $mode, $full ) or
             $self->_error( qq[Could not chown '$full' to ] . $entry->mode );
     }
 
@@ -956,7 +999,7 @@ sub _extract_special_file_as_plain_file {
 
     my $err;
     TRY: {
-        my $orig = $self->_find_entry( $entry->linkname );
+        my $orig = $self->_find_entry( $entry->linkname, $entry );
 
         unless( $orig ) {
             $err =  qq[Could not find file '] . $entry->linkname .
@@ -965,7 +1008,7 @@ sub _extract_special_file_as_plain_file {
         }
 
         ### clone the entry, make it appear as a normal file ###
-        my $clone = $entry->clone;
+        my $clone = $orig->clone;
         $clone->_downgrade_to_plainfile;
         $self->_extract_file( $clone, $file ) or last TRY;
 
@@ -1030,10 +1073,46 @@ sub _find_entry {
     ### it's an object already
     return $file if UNIVERSAL::isa( $file, 'Archive::Tar::File' );
 
-    for my $entry ( @{$self->_data} ) {
-        my $path = $entry->full_path;
-        return $entry if $path eq $file;
-    }
+seach_entry:
+		if($self->_data){
+			for my $entry ( @{$self->_data} ) {
+					my $path = $entry->full_path;
+					return $entry if $path eq $file;
+			}
+		}
+
+		if($Archive::Tar::RESOLVE_SYMLINK!~/none/){
+			if(my $link_entry = shift()){#fallback mode when symlinks are using relative notations ( ../a/./b/text.bin )
+				$file = _symlinks_resolver( $link_entry->name, $file );
+				goto seach_entry if $self->_data;
+
+				#this will be slower than never, but won't failed!
+
+				my $iterargs = $link_entry->{'_archive'};
+				if($Archive::Tar::RESOLVE_SYMLINK=~/speed/ && @$iterargs==3){
+				#faster	but whole archive will be read in memory
+					#read whole archive and share data
+					my $archive = Archive::Tar->new;
+					$archive->read( @$iterargs );
+					push @$iterargs, $archive; #take a trace for destruction
+					if($archive->_data){
+						$self->_data( $archive->_data );
+						goto seach_entry;
+					}
+				}#faster
+
+				{#slower but lower memory usage
+					# $iterargs = [$filename, $compressed, $opts];
+					my $next = Archive::Tar->iter( @$iterargs );
+					while(my $e = $next->()){
+						if($e->full_path eq $file){
+							undef $next;
+							return $e;
+						}
+					}
+				}#slower
+			}
+		}
 
     $self->_error( qq[No such file in archive: '$file'] );
     return;
@@ -1193,8 +1272,8 @@ Write the in-memory archive to disk.  The first argument can either
 be the name of a file or a reference to an already open filehandle (a
 GLOB reference).
 
-The second argument is used to indicate compression. You can either
-compress using C<gzip> or C<bzip2>. If you pass a digit, it's assumed
+The second argument is used to indicate compression. You can
+compress using C<gzip>, C<bzip2> or C<xz>. If you pass a digit, it's assumed
 to be the C<gzip> compression level (between 1 and 9), but the use of
 constants is preferred:
 
@@ -1204,10 +1283,13 @@ constants is preferred:
   # write a bzip compressed file
   $tar->write( 'out.tbz', COMPRESS_BZIP );
 
+  # write a xz compressed file
+  $tar->write( 'out.txz', COMPRESS_XZ );
+
 Note that when you pass in a filehandle, the compression argument
 is ignored, as all files are printed verbatim to your filehandle.
 If you wish to enable compression with filehandles, use an
-C<IO::Zlib> or C<IO::Compress::Bzip2> filehandle instead.
+C<IO::Zlib>, C<IO::Compress::Bzip2> or C<IO::Compress::Xz> filehandle instead.
 
 The third argument is an optional prefix. All files will be tucked
 away in the directory you specify as prefix. So if you have files
@@ -1553,7 +1635,7 @@ sub add_data {
 
 =head2 $tar->error( [$BOOL] )
 
-Returns the current errorstring (usually, the last error reported).
+Returns the current error string (usually, the last error reported).
 If a true value was specified, it will give the C<Carp::longmess>
 equivalent of the error, in effect giving you a stacktrace.
 
@@ -1643,8 +1725,8 @@ Creates a tar file from the list of files provided.  The first
 argument can either be the name of the tar file to create or a
 reference to an open file handle (e.g. a GLOB reference).
 
-The second argument is used to indicate compression. You can either
-compress using C<gzip> or C<bzip2>. If you pass a digit, it's assumed
+The second argument is used to indicate compression. You can
+compress using C<gzip>, C<bzip2> or C<xz>. If you pass a digit, it's assumed
 to be the C<gzip> compression level (between 1 and 9), but the use of
 constants is preferred:
 
@@ -1654,10 +1736,13 @@ constants is preferred:
   # write a bzip compressed file
   Archive::Tar->create_archive( 'out.tbz', COMPRESS_BZIP, @filelist );
 
+  # write a xz compressed file
+  Archive::Tar->create_archive( 'out.txz', COMPRESS_XZ, @filelist );
+
 Note that when you pass in a filehandle, the compression argument
 is ignored, as all files are printed verbatim to your filehandle.
 If you wish to enable compression with filehandles, use an
-C<IO::Zlib> or C<IO::Compress::Bzip2> filehandle instead.
+C<IO::Zlib>, C<IO::Compress::Bzip2> or C<IO::Compress::Xz> filehandle instead.
 
 The remaining arguments list the files to be included in the tar file.
 These files must all exist. Any files which don't exist or can't be
@@ -1717,7 +1802,8 @@ Example usage:
 
 sub iter {
     my $class       = shift;
-    my $filename    = shift or return;
+    my $filename    = shift;
+    return unless defined $filename;
     my $compressed  = shift || 0;
     my $opts        = shift || {};
 
@@ -1729,6 +1815,7 @@ sub iter {
     ) or return;
 
     my @data;
+		my $CONSTRUCT_ARGS = [ $filename, $compressed, $opts ];
     return sub {
         return shift(@data)     if @data;       # more than one file returned?
         return                  unless $handle; # handle exhausted?
@@ -1736,12 +1823,25 @@ sub iter {
         ### read data, should only return file
         my $tarfile = $class->_read_tar($handle, { %$opts, limit => 1 });
         @data = @$tarfile if ref $tarfile && ref $tarfile eq 'ARRAY';
+				if($Archive::Tar::RESOLVE_SYMLINK!~/none/){
+					foreach(@data){
+						#may refine this heuristic for ON_UNIX?
+						if($_->linkname){
+							#is there a better slot to store/share it ?
+							$_->{'_archive'} = $CONSTRUCT_ARGS;
+						}
+					}
+				}
 
         ### return one piece of data
         return shift(@data)     if @data;
 
         ### data is exhausted, free the filehandle
         undef $handle;
+				if(@$CONSTRUCT_ARGS == 4){
+					#free archive in memory
+					undef $CONSTRUCT_ARGS->[-1];
+				}
         return;
     };
 }
@@ -1847,11 +1947,19 @@ Returns true if C<Archive::Tar> can extract C<bzip2> compressed archives
 
 sub has_bzip2_support { return BZIP }
 
+=head2 $bool = Archive::Tar->has_xz_support
+
+Returns true if C<Archive::Tar> can extract C<xz> compressed archives
+
+=cut
+
+sub has_xz_support { return XZ }
+
 =head2 Archive::Tar->can_handle_compressed_files
 
 A simple checking routine, which will return true if C<Archive::Tar>
-is able to uncompress compressed archives on the fly with C<IO::Zlib>
-and C<IO::Compress::Bzip2> or false if not both are installed.
+is able to uncompress compressed archives on the fly with C<IO::Zlib>,
+C<IO::Compress::Bzip2> and C<IO::Compress::Xz> or false if not both are installed.
 
 You can use this as a shortcut to determine whether C<Archive::Tar>
 will do what you think before passing compressed archives to its
@@ -1863,6 +1971,32 @@ sub can_handle_compressed_files { return ZLIB && BZIP ? 1 : 0 }
 
 sub no_string_support {
     croak("You have to install IO::String to support writing archives to strings");
+}
+
+sub _symlinks_resolver{
+  my ($src, $trg) = @_;
+  my @src = split /[\/\\]/, $src;
+  my @trg = split /[\/\\]/, $trg;
+  pop @src; #strip out current object name
+  if(@trg and $trg[0] eq ''){
+    shift @trg;
+    #restart path from scratch
+    @src = ( );
+  }
+  foreach my $part ( @trg ){
+    next if $part eq '.'; #ignore current
+    if($part eq '..'){
+      #got to parent
+      pop @src;
+    }
+    else{
+      #append it
+      push @src, $part;
+    }
+  }
+  my $path = join('/', @src);
+  warn "_symlinks_resolver('$src','$trg') = $path" if $DEBUG;
+  return $path;
 }
 
 1;
@@ -2007,6 +2141,30 @@ zero padded numbers for C<size>, C<mtime> and C<checksum>.
 The default is C<0>, indicating that we will create space padded
 numbers. Added for compatibility with C<busybox> implementations.
 
+=head2 Tuning the way RESOLVE_SYMLINK will works
+
+	You can tune the behaviour by setting the $Archive::Tar::RESOLVE_SYMLINK variable,
+	or $ENV{PERL5_AT_RESOLVE_SYMLINK} before loading the module Archive::Tar.
+
+  Values can be one of the following:
+
+		none
+           Disable this mechanism and failed as it was in previous version (<1.88)
+
+		speed (default)
+           If you prefer speed
+           this will read again the whole archive using read() so all entries
+           will be available
+
+    memory
+           If you prefer memory
+
+	Limitation
+
+		It won't work for terminal, pipe or sockets or every non seekable source.
+
+=cut
+
 =head1 FAQ
 
 =over 4
@@ -2126,7 +2284,7 @@ write a C<.tar.Z> file
     use Archive::Tar;
     use IO::File;
 
-    my $fh = new IO::File "| compress -c >$filename";
+    my $fh = IO::File->new( "| compress -c >$filename" );
     my $tar = Archive::Tar->new();
     ...
     $tar->write($fh);
@@ -2146,7 +2304,7 @@ For example, if you add a Unicode string like
     $tar->add_data('file.txt', "Euro: \x{20AC}");
 
 then there will be a problem later when the tarfile gets written out
-to disk via C<$tar->write()>:
+to disk via C<< $tar->write() >>:
 
     Wide character in print at .../Archive/Tar.pm line 1014.
 

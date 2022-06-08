@@ -1,10 +1,10 @@
 package Imager::File::PNG;
+use 5.006;
 use strict;
 use Imager;
-use vars qw($VERSION @ISA);
 
 BEGIN {
-  $VERSION = "0.86";
+  our $VERSION = "0.95";
 
   require XSLoader;
   XSLoader::load('Imager::File::PNG', $VERSION);
@@ -16,7 +16,10 @@ Imager->register_reader
    single => 
    sub { 
      my ($im, $io, %hsh) = @_;
-     $im->{IMG} = i_readpng_wiol($io);
+     my $flags = 0;
+     $hsh{png_ignore_benign_errors}
+       and $flags |= IMPNG_READ_IGNORE_BENIGN_ERRORS;
+     $im->{IMG} = i_readpng_wiol($io, $flags);
 
      unless ($im->{IMG}) {
        $im->_set_error(Imager->_error_as_msg);
